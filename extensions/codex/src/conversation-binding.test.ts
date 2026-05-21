@@ -15,6 +15,7 @@ const agentRuntimeMocks = vi.hoisted(() => ({
   resolveDefaultAgentDir: vi.fn(() => "/agent"),
   resolvePersistedAuthProfileOwnerAgentDir: vi.fn(),
   resolveProviderIdForAuth: vi.fn((provider: string) => provider),
+  resolveSessionAgentIds: vi.fn(() => ({ defaultAgentId: "main", sessionAgentId: "main" })),
   saveAuthProfileStore: vi.fn(),
 }));
 
@@ -51,6 +52,7 @@ describe("codex conversation binding", () => {
     agentRuntimeMocks.resolveDefaultAgentDir.mockClear();
     agentRuntimeMocks.resolvePersistedAuthProfileOwnerAgentDir.mockReset();
     agentRuntimeMocks.resolveProviderIdForAuth.mockClear();
+    agentRuntimeMocks.resolveSessionAgentIds.mockClear();
     agentRuntimeMocks.saveAuthProfileStore.mockReset();
     await fs.rm(tempDir, { recursive: true, force: true });
   });
@@ -63,6 +65,10 @@ describe("codex conversation binding", () => {
     agentRuntimeMocks.resolveAuthProfileOrder.mockReturnValue([]);
     agentRuntimeMocks.resolveDefaultAgentDir.mockReturnValue("/agent");
     agentRuntimeMocks.resolveProviderIdForAuth.mockImplementation((provider: string) => provider);
+    agentRuntimeMocks.resolveSessionAgentIds.mockReturnValue({
+      defaultAgentId: "main",
+      sessionAgentId: "main",
+    });
   });
 
   it("uses the default Codex auth profile and omits the public OpenAI provider for new binds", async () => {
@@ -200,6 +206,38 @@ describe("codex conversation binding", () => {
     };
     expect(sharedClientParams?.agentDir).toBe(agentDir);
     expect(data.agentDir).toBe(agentDir);
+  });
+
+  it("applies configured exec mode policy when binding a new app-server thread", async () => {
+    const sessionFile = path.join(tempDir, "session.jsonl");
+    const requests: Array<{ method: string; params: Record<string, unknown> }> = [];
+    sharedClientMocks.getSharedCodexAppServerClient.mockResolvedValue({
+      request: vi.fn(async (method: string, requestParams: Record<string, unknown>) => {
+        requests.push({ method, params: requestParams });
+        return {
+          thread: { id: "thread-new", sessionId: "session-1", cwd: tempDir },
+          model: "gpt-5.4-mini",
+        };
+      }),
+    });
+
+    await startCodexConversationThread({
+      config: {
+        tools: {
+          exec: {
+            mode: "ask",
+          },
+        },
+      } as never,
+      sessionFile,
+      workspaceDir: tempDir,
+      model: "gpt-5.4-mini",
+    });
+
+    expect(requests[0]?.method).toBe("thread/start");
+    expect(requests[0]?.params.approvalPolicy).toBe("on-request");
+    expect(requests[0]?.params.approvalsReviewer).toBe("user");
+    expect(requests[0]?.params.sandbox).toBe("workspace-write");
   });
 
   it("clears the Codex app-server sidecar when a pending bind is denied", async () => {
@@ -735,7 +773,16 @@ describe("codex conversation binding", () => {
           },
         },
       },
-      { timeoutMs: 50 },
+      {
+        timeoutMs: 50,
+        config: {
+          tools: {
+            exec: {
+              mode: "ask",
+            },
+          },
+        } as never,
+      },
     );
 
     expect(result).toEqual({ handled: true, reply: { text: "done" } });
@@ -746,5 +793,14 @@ describe("codex conversation binding", () => {
     expect(turnStartParams[0]?.input).toEqual([
       { type: "text", text: "use the fallback prompt", text_elements: [] },
     ]);
+    expect(turnStartParams[0]?.approvalPolicy).toBe("on-request");
+    expect(turnStartParams[0]?.approvalsReviewer).toBe("user");
+    expect(turnStartParams[0]?.sandboxPolicy).toEqual({
+      type: "workspaceWrite",
+      writableRoots: [tempDir],
+      networkAccess: false,
+      excludeTmpdirEnvVar: false,
+      excludeSlashTmp: false,
+    });
   });
 });

@@ -544,6 +544,8 @@ async function bindConversation(
     sessionFile: ctx.sessionFile,
     workspaceDir,
     agentDir: scope.agentDir,
+    agentId: scope.sessionAgentId,
+    sessionKey: ctx.sessionKey,
     threadId: parsed.threadId,
     model: parsed.model,
     modelProvider: parsed.provider,
@@ -897,12 +899,16 @@ async function resolveControlSessionFile(ctx: PluginCommandContext): Promise<str
   return (await resolveControlTarget(ctx))?.sessionFile;
 }
 
-function resolveCodexConversationControlScope(ctx: PluginCommandContext): { agentDir: string } {
+function resolveCodexConversationControlScope(ctx: PluginCommandContext): {
+  sessionAgentId: string;
+  agentDir: string;
+} {
   const { sessionAgentId } = resolveSessionAgentIds({
     sessionKey: ctx.sessionKey,
     config: ctx.config,
   });
   return {
+    sessionAgentId,
     agentDir: resolveAgentDir(ctx.config, sessionAgentId),
   };
 }

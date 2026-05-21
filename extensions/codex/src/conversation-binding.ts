@@ -1,5 +1,5 @@
 import { formatErrorMessage } from "openclaw/plugin-sdk/agent-harness-runtime";
-import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
+import { resolveSessionAgentIds } from "openclaw/plugin-sdk/agent-runtime";
 import type {
   PluginConversationBindingResolvedEvent,
   PluginHookInboundClaimContext,
@@ -10,6 +10,7 @@ import { resolveCodexAppServerAuthProfileIdForAgent } from "./app-server/auth-br
 import { CODEX_CONTROL_METHODS } from "./app-server/capabilities.js";
 import {
   codexSandboxPolicyForTurn,
+  resolveOpenClawExecPolicyForCodexAppServer,
   resolveCodexAppServerRuntimeOptions,
   type CodexAppServerApprovalPolicy,
   type CodexAppServerSandboxMode,
@@ -57,7 +58,7 @@ export {
 
 type CodexConversationRunOptions = {
   pluginConfig?: unknown;
-  config?: OpenClawConfig;
+  config?: CodexConversationConfig;
   timeoutMs?: number;
   resumeCodexCliSessionOnNode?: ResumeCodexCliSessionOnNodeFn;
 };
@@ -68,10 +69,12 @@ type ResumeCodexCliSessionOnNodeFn = (
 
 type CodexConversationStartParams = {
   pluginConfig?: unknown;
-  config?: Parameters<typeof resolveCodexAppServerAuthProfileIdForAgent>[0]["config"];
+  config?: CodexConversationConfig;
   sessionFile: string;
   workspaceDir?: string;
   agentDir?: string;
+  agentId?: string;
+  sessionKey?: string;
   threadId?: string;
   model?: string;
   modelProvider?: string;
@@ -84,6 +87,10 @@ type CodexConversationStartParams = {
 type BoundTurnResult = {
   reply: ReplyPayload;
 };
+
+type CodexConversationConfig = Parameters<
+  typeof resolveCodexAppServerAuthProfileIdForAgent
+>[0]["config"];
 
 type CodexConversationGlobalState = {
   queues: Map<string, Promise<void>>;
@@ -127,6 +134,8 @@ export async function startCodexConversationThread(
       sandbox: params.sandbox,
       serviceTier: params.serviceTier,
       config: params.config,
+      agentId: params.agentId,
+      sessionKey: params.sessionKey,
     });
   } else {
     await createThread({
@@ -141,6 +150,8 @@ export async function startCodexConversationThread(
       sandbox: params.sandbox,
       serviceTier: params.serviceTier,
       config: params.config,
+      agentId: params.agentId,
+      sessionKey: params.sessionKey,
     });
   }
   return createCodexConversationBindingData({
@@ -218,6 +229,8 @@ export async function handleCodexConversationInboundClaim(
         data,
         prompt,
         event,
+        config: options.config,
+        sessionKey: event.sessionKey ?? ctx.sessionKey,
         pluginConfig: options.pluginConfig,
         timeoutMs: options.timeoutMs,
       }),
@@ -259,9 +272,16 @@ async function attachExistingThread(params: {
   sandbox?: CodexAppServerSandboxMode;
   serviceTier?: CodexServiceTier;
   config?: CodexAppServerAuthProfileLookup["config"];
+  agentId?: string;
+  sessionKey?: string;
 }): Promise<void> {
   const runtime = resolveCodexAppServerRuntimeOptions({
     pluginConfig: params.pluginConfig,
+    execPolicy: resolveConversationExecPolicy({
+      config: params.config,
+      agentId: params.agentId,
+      sessionKey: params.sessionKey,
+    }),
   });
   const agentLookup = buildAgentLookup({ agentDir: params.agentDir, config: params.config });
   const modelProvider = resolveThreadRequestModelProvider({
@@ -328,9 +348,16 @@ async function createThread(params: {
   sandbox?: CodexAppServerSandboxMode;
   serviceTier?: CodexServiceTier;
   config?: CodexAppServerAuthProfileLookup["config"];
+  agentId?: string;
+  sessionKey?: string;
 }): Promise<void> {
   const runtime = resolveCodexAppServerRuntimeOptions({
     pluginConfig: params.pluginConfig,
+    execPolicy: resolveConversationExecPolicy({
+      config: params.config,
+      agentId: params.agentId,
+      sessionKey: params.sessionKey,
+    }),
   });
   const agentLookup = buildAgentLookup({ agentDir: params.agentDir, config: params.config });
   const modelProvider = resolveThreadRequestModelProvider({
@@ -392,10 +419,16 @@ async function runBoundTurn(params: {
   prompt: string;
   event: PluginHookInboundClaimEvent;
   pluginConfig?: unknown;
+  config?: CodexConversationConfig;
+  sessionKey?: string;
   timeoutMs?: number;
 }): Promise<BoundTurnResult> {
   const runtime = resolveCodexAppServerRuntimeOptions({
     pluginConfig: params.pluginConfig,
+    execPolicy: resolveConversationExecPolicy({
+      config: params.config,
+      sessionKey: params.sessionKey,
+    }),
   });
   const agentLookup = buildAgentLookup({ agentDir: params.data.agentDir });
   const binding = await readCodexAppServerBinding(params.data.sessionFile, agentLookup);
@@ -502,6 +535,8 @@ async function runBoundTurnWithMissingThreadRecovery(params: {
   prompt: string;
   event: PluginHookInboundClaimEvent;
   pluginConfig?: unknown;
+  config?: CodexConversationConfig;
+  sessionKey?: string;
   timeoutMs?: number;
 }): Promise<BoundTurnResult> {
   try {
@@ -523,9 +558,31 @@ async function runBoundTurnWithMissingThreadRecovery(params: {
       approvalPolicy: binding?.approvalPolicy,
       sandbox: binding?.sandbox,
       serviceTier: binding?.serviceTier,
+      config: params.config,
+      sessionKey: params.sessionKey,
     });
     return await runBoundTurn(params);
   }
+}
+
+function resolveConversationExecPolicy(params: {
+  config?: CodexConversationConfig;
+  agentId?: string;
+  sessionKey?: string;
+}) {
+  if (!params.config) {
+    return undefined;
+  }
+  const agentId =
+    params.agentId ??
+    resolveSessionAgentIds({
+      sessionKey: params.sessionKey,
+      config: params.config,
+    }).sessionAgentId;
+  return resolveOpenClawExecPolicyForCodexAppServer({
+    config: params.config,
+    agentId,
+  });
 }
 
 function isCodexThreadNotFoundError(error: unknown): boolean {
