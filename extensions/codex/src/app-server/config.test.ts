@@ -881,6 +881,19 @@ allowed_sandbox_modes = ["read-only", "workspace-write"]
     ).toThrow("tools.exec.mode=ask requires Codex app-server user approvals");
   });
 
+  it.each(["auto", "ask"] as const)(
+    "fails closed when normalized OpenClaw %s mode cannot use prompting approvals",
+    (execMode) => {
+      expect(() =>
+        resolveRuntimeForTest({
+          pluginConfig: {},
+          execMode,
+          requirementsToml: 'allowed_approval_policies = ["never"]\n',
+        }),
+      ).toThrow(`tools.exec.mode=${execMode} requires Codex app-server prompting approvals`);
+    },
+  );
+
   it("keeps normalized OpenClaw full exec mode on default Codex yolo", () => {
     const runtime = resolveRuntimeForTest({
       pluginConfig: {},

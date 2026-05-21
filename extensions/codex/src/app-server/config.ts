@@ -423,6 +423,8 @@ export function resolveCodexAppServerRuntimeOptions(
           env,
           forceGuardian: normalizedPolicyMode === "guardian",
           forceUserReviewer,
+          execModeRequiringPromptingApprovals:
+            execMode === "auto" || execMode === "ask" ? execMode : undefined,
           requirementsToml: params.requirementsToml,
           requirementsPath: params.requirementsPath,
           readRequirementsFile: params.readRequirementsFile,
@@ -656,6 +658,7 @@ function resolveDefaultCodexAppServerPolicy(params: {
   transport: CodexAppServerTransportMode;
   forceGuardian?: boolean;
   forceUserReviewer?: boolean;
+  execModeRequiringPromptingApprovals?: Extract<OpenClawExecMode, "auto" | "ask">;
   env?: NodeJS.ProcessEnv;
   requirementsToml?: string | null;
   requirementsPath?: string;
@@ -673,7 +676,10 @@ function resolveDefaultCodexAppServerPolicy(params: {
     }
     return {
       mode: "guardian",
-      approvalPolicy: selectGuardianApprovalPolicy(undefined),
+      approvalPolicy: selectGuardianApprovalPolicy(
+        undefined,
+        params.execModeRequiringPromptingApprovals,
+      ),
       approvalsReviewer: params.forceUserReviewer
         ? selectUserApprovalsReviewer(undefined)
         : selectGuardianApprovalsReviewer(undefined),
@@ -697,7 +703,10 @@ function resolveDefaultCodexAppServerPolicy(params: {
   }
   return {
     mode: "guardian",
-    approvalPolicy: selectGuardianApprovalPolicy(allowedApprovalPolicies),
+    approvalPolicy: selectGuardianApprovalPolicy(
+      allowedApprovalPolicies,
+      params.execModeRequiringPromptingApprovals,
+    ),
     approvalsReviewer: params.forceUserReviewer
       ? selectUserApprovalsReviewer(allowedApprovalsReviewers)
       : selectGuardianApprovalsReviewer(allowedApprovalsReviewers),
@@ -947,6 +956,7 @@ function normalizeRequirementsApprovalsReviewer(
 
 function selectGuardianApprovalPolicy(
   allowedApprovalPolicies: Set<CodexAppServerApprovalPolicy> | undefined,
+  execModeRequiringPromptingApprovals?: Extract<OpenClawExecMode, "auto" | "ask">,
 ): CodexAppServerApprovalPolicy {
   if (allowedApprovalPolicies === undefined || allowedApprovalPolicies.has("on-request")) {
     return "on-request";
@@ -956,6 +966,11 @@ function selectGuardianApprovalPolicy(
   }
   if (allowedApprovalPolicies.has("untrusted")) {
     return "untrusted";
+  }
+  if (execModeRequiringPromptingApprovals) {
+    throw new Error(
+      `tools.exec.mode=${execModeRequiringPromptingApprovals} requires Codex app-server prompting approvals`,
+    );
   }
   if (allowedApprovalPolicies.has("never")) {
     return "never";
