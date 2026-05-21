@@ -34,7 +34,6 @@ import { describeExecTool } from "./bash-tools.descriptions.js";
 import { processGatewayAllowlist } from "./bash-tools.exec-host-gateway.js";
 import { executeNodeHostCommand } from "./bash-tools.exec-host-node.js";
 import { renderExecOutputText } from "./bash-tools.exec-output.js";
-import { createModelExecAutoReviewer } from "./exec-auto-reviewer.js";
 import {
   DEFAULT_MAX_OUTPUT,
   DEFAULT_PATH,
@@ -59,6 +58,7 @@ import {
   resolveWorkdir,
   truncateMiddle,
 } from "./bash-tools.shared.js";
+import { createModelExecAutoReviewer } from "./exec-auto-reviewer.js";
 import { EXEC_TOOL_DISPLAY_SUMMARY } from "./tool-description-presets.js";
 import { type AgentToolWithMeta, failedTextResult, textResult } from "./tools/common.js";
 
@@ -1404,14 +1404,17 @@ export function createExecTool(
       const host: ExecHost = target.effectiveHost;
 
       const approvalDefaults = loadExecApprovals().defaults;
-      const configuredSecurity =
-        defaults?.security ?? approvalDefaults?.security ?? (host === "sandbox" ? "deny" : "full");
+      const explicitSecurity = defaults?.security ?? approvalDefaults?.security;
+      const configuredSecurity = explicitSecurity ?? (host === "sandbox" ? "deny" : "full");
       const modePolicy = resolveExecModePolicy({
         mode: defaults?.mode,
         security: configuredSecurity,
         ask: defaults?.ask ?? approvalDefaults?.ask ?? "off",
       });
       let security = modePolicy.security;
+      if (security === "deny" && (defaults?.mode === "deny" || explicitSecurity === "deny")) {
+        throw new Error(`exec denied: host=${host} security=deny`);
+      }
       if (elevatedRequested && elevatedMode === "full") {
         security = "full";
       }

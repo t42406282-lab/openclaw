@@ -287,6 +287,7 @@ export async function handlePendingApprovalRequest<
     requestEvent: RequestedApprovalEvent<TPayload>,
   ) => Promise<void> | void;
   afterDecisionErrorLabel?: string;
+  requireDeliveryRoute?: boolean;
 }): Promise<void> {
   const approvalClientConnIds = resolveApprovalRequestRecipientConnIds({
     context: params.context,
@@ -321,7 +322,12 @@ export async function handlePendingApprovalRequest<
       approvalKind: params.approvalKind ?? "exec",
     });
 
-  if (!hasApprovalClients && !hasTurnSourceRoute && !delivered) {
+  if (
+    params.requireDeliveryRoute !== false &&
+    !hasApprovalClients &&
+    !hasTurnSourceRoute &&
+    !delivered
+  ) {
     params.manager.expire(params.record.id, "no-approval-route");
     params.respond(
       true,

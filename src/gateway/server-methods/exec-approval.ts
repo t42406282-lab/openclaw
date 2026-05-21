@@ -187,6 +187,7 @@ export function createExecApprovalHandlers(
         turnSourceTo?: string;
         turnSourceAccountId?: string;
         turnSourceThreadId?: string | number;
+        requireDeliveryRoute?: boolean;
         timeoutMs?: number;
         twoPhase?: boolean;
       };
@@ -367,7 +368,7 @@ export function createExecApprovalHandlers(
         requestEventName: "exec.approval.requested",
         requestEvent,
         twoPhase,
-        approvalKind: "exec",
+        requireDeliveryRoute: p.requireDeliveryRoute,
         deliverRequest: () => {
           const deliveryTasks: Array<Promise<boolean>> = [];
           if (opts?.forwarder) {

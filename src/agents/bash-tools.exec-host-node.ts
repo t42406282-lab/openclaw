@@ -54,6 +54,7 @@ async function registerResolvedNodeAutoReviewApproval(params: {
       nodeId: params.target.nodeId,
       security: params.hostSecurity,
       ask: params.hostAsk,
+      requireDeliveryRoute: false,
       warningText: params.request.warnings.join("\n").trim() || undefined,
       commandHighlighting: params.request.commandHighlighting,
       ...buildExecApprovalRequesterContext({
@@ -108,8 +109,7 @@ export async function executeNodeHostCommand(
     durableApprovalSatisfied,
     inlineEvalHit,
     autoReviewArgv,
-  } =
-    approvalAnalysis;
+  } = approvalAnalysis;
   const requiresAsk =
     requiresExecApproval({
       ask: hostAsk,

@@ -49,6 +49,7 @@ export type RequestExecApprovalDecisionParams = {
   turnSourceTo?: string;
   turnSourceAccountId?: string;
   turnSourceThreadId?: string | number;
+  requireDeliveryRoute?: boolean;
 };
 
 type ExecApprovalRequestToolParams = RequestExecApprovalDecisionParams & {
@@ -79,6 +80,7 @@ function buildExecApprovalRequestToolParams(
     turnSourceTo: params.turnSourceTo,
     turnSourceAccountId: params.turnSourceAccountId,
     turnSourceThreadId: params.turnSourceThreadId,
+    requireDeliveryRoute: params.requireDeliveryRoute,
     timeoutMs: DEFAULT_APPROVAL_TIMEOUT_MS,
     twoPhase: true,
   };
@@ -193,6 +195,7 @@ type HostExecApprovalParams = {
   turnSourceTo?: string;
   turnSourceAccountId?: string;
   turnSourceThreadId?: string | number;
+  requireDeliveryRoute?: boolean;
 };
 
 type ExecApprovalRequesterContext = {
@@ -294,6 +297,7 @@ async function buildHostApprovalDecisionParams(
       sessionKey: params.sessionKey,
     }),
     resolvedPath: params.resolvedPath,
+    requireDeliveryRoute: params.requireDeliveryRoute,
     ...buildExecApprovalTurnSourceContext(params),
   };
 }

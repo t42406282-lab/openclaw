@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { captureEnv } from "../test-utils/env.js";
 import { resetProcessRegistryForTests } from "./bash-process-registry.js";
 import { createExecTool } from "./bash-tools.exec.js";
@@ -109,5 +109,30 @@ describe("exec security floor", () => {
         ask: "off",
       }),
     ).rejects.toThrow(/exec denied/i);
+  });
+
+  it("honors configured deny mode before implicit sandbox execution", async () => {
+    const buildExecSpec = vi.fn(async () => ({
+      argv: ["/bin/sh", "-lc", "printf leaked"],
+      env: process.env,
+      stdinMode: "pipe-closed" as const,
+    }));
+    const tool = createExecTool({
+      host: "auto",
+      mode: "deny",
+      sandbox: {
+        containerName: "sandbox-deny-test",
+        workspaceDir: tempRoot ?? "/tmp",
+        containerWorkdir: "/workspace",
+        buildExecSpec,
+      },
+    });
+
+    await expect(
+      tool.execute("call-mode-deny-sandbox", {
+        command: "echo blocked",
+      }),
+    ).rejects.toThrow(/security=deny|exec denied/i);
+    expect(buildExecSpec).not.toHaveBeenCalled();
   });
 });

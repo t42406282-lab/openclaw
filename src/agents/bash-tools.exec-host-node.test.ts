@@ -462,6 +462,7 @@ describe("executeNodeHostCommand", () => {
         approvalId: expect.any(String),
         host: "node",
         nodeId: "node-1",
+        requireDeliveryRoute: false,
         systemRunPlan: expect.objectContaining({
           commandPreview: "pwd",
         }),
