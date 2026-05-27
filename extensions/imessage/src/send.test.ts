@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   clearIMessageApprovalReactionTargetsForTest,
@@ -395,6 +398,31 @@ describe("sendMessageIMessage receipts", () => {
     });
   });
 
+  it("uses the default local chat.db path for Homebrew imsg paths", async () => {
+    vi.stubEnv("HOME", "/Users/me");
+    const client = createRejectingClient(new Error("imsg rpc timeout (send)"));
+    const runCliJson = vi.fn();
+    const resolveSentMessageGuidImpl = vi.fn(async () => "p:0/homebrew-guid");
+    const approvalText = createApprovalText("approval-homebrew");
+
+    const result = await sendMessageIMessage("chat_id:42", approvalText, {
+      config: IMESSAGE_TEST_CFG,
+      client,
+      cliPath: "/opt/homebrew/bin/imsg",
+      runCliJson,
+      resolveSentMessageGuidImpl,
+    });
+
+    expect(result.messageId).toBe("p:0/homebrew-guid");
+    expect(runCliJson).not.toHaveBeenCalled();
+    expect(resolveSentMessageGuidImpl).toHaveBeenCalledWith({
+      dbPath: "/Users/me/Library/Messages/chat.db",
+      target: expect.objectContaining({ kind: "chat_id", chatId: 42 }),
+      text: expect.stringContaining("ID: approval-homebrew"),
+      sentAfterMs: expect.any(Number),
+    });
+  });
+
   it("does not use the local default chat.db path for custom cliPath wrappers", async () => {
     vi.stubEnv("HOME", "/Users/me");
     const client = createRejectingClient(new Error("imsg rpc timeout (send)"));
@@ -404,9 +432,19 @@ describe("sendMessageIMessage receipts", () => {
 
     await expect(
       sendMessageIMessage("chat_id:42", approvalText, {
-        config: IMESSAGE_TEST_CFG,
+        config: {
+          channels: {
+            imessage: {
+              accounts: {
+                default: {
+                  remoteHost: "bot@gateway-host",
+                },
+              },
+            },
+          },
+        },
         client,
-        cliPath: "/usr/local/bin/imsg-remote",
+        cliPath: "/Users/me/.openclaw/scripts/imsg",
         runCliJson,
         resolveSentMessageGuidImpl,
       }),
@@ -417,6 +455,39 @@ describe("sendMessageIMessage receipts", () => {
       dbPath: undefined,
       target: expect.objectContaining({ kind: "chat_id", chatId: 42 }),
       text: expect.stringContaining("ID: approval-remote"),
+      sentAfterMs: expect.any(Number),
+    });
+  });
+
+  it("does not use the local default chat.db path for auto-detected ssh wrappers", async () => {
+    vi.stubEnv("HOME", "/Users/me");
+    const wrapperDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-imsg-wrapper-"));
+    const wrapperPath = path.join(wrapperDir, "imsg");
+    fs.writeFileSync(wrapperPath, '#!/bin/sh\nexec ssh -T gateway-host imsg "$@"\n');
+    const client = createRejectingClient(new Error("imsg rpc timeout (send)"));
+    const runCliJson = vi.fn();
+    const resolveSentMessageGuidImpl = vi.fn(async () => null);
+    const approvalText = createApprovalText("approval-ssh-wrapper");
+
+    try {
+      await expect(
+        sendMessageIMessage("chat_id:42", approvalText, {
+          config: IMESSAGE_TEST_CFG,
+          client,
+          cliPath: wrapperPath,
+          runCliJson,
+          resolveSentMessageGuidImpl,
+        }),
+      ).rejects.toThrow("imsg rpc timeout (send)");
+    } finally {
+      fs.rmSync(wrapperDir, { recursive: true, force: true });
+    }
+
+    expect(runCliJson).not.toHaveBeenCalled();
+    expect(resolveSentMessageGuidImpl).toHaveBeenCalledWith({
+      dbPath: undefined,
+      target: expect.objectContaining({ kind: "chat_id", chatId: 42 }),
+      text: expect.stringContaining("ID: approval-ssh-wrapper"),
       sentAfterMs: expect.any(Number),
     });
   });

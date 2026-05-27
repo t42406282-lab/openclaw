@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { constants, accessSync } from "node:fs";
+import { constants, accessSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
@@ -96,6 +96,7 @@ export type IMessageSendResult = {
 };
 
 const MAX_REPLY_TO_ID_LENGTH = 256;
+const sshWrapperCliPathCache = new Map<string, boolean>();
 
 function safeHomeDir(): string | undefined {
   const home = process.env.HOME?.trim();
@@ -109,17 +110,53 @@ function safeHomeDir(): string | undefined {
   }
 }
 
-function isLocalIMessageCliPath(cliPath: string): boolean {
-  const trimmed = cliPath.trim();
-  return trimmed === "imsg" || path.basename(trimmed) === "imsg";
+function expandCliPathForInspection(cliPath: string): string {
+  if (!cliPath.startsWith("~")) {
+    return cliPath;
+  }
+  const home = safeHomeDir();
+  return home ? cliPath.replace(/^~(?=$|[\\/])/, home) : cliPath;
 }
 
-function resolveChatDbLookupPath(params: { cliPath: string; dbPath?: string }): string | undefined {
+function isSshIMessageCliWrapper(cliPath: string): boolean {
+  if (cliPath === "imsg") {
+    return false;
+  }
+  const cached = sshWrapperCliPathCache.get(cliPath);
+  if (cached !== undefined) {
+    return cached;
+  }
+  let detected = false;
+  try {
+    const content = readFileSync(expandCliPathForInspection(cliPath), "utf8");
+    detected = /\bssh\b[\s\S]*\bimsg\b/u.test(content);
+  } catch {
+    detected = false;
+  }
+  // cliPath scripts are process-stable channel metadata; cache inspection so
+  // repeated sends do not poll wrapper files on the hot path.
+  sshWrapperCliPathCache.set(cliPath, detected);
+  return detected;
+}
+
+function isLocalIMessageCliPath(params: { cliPath: string; remoteHost?: string }): boolean {
+  const cliPath = params.cliPath.trim();
+  if (params.remoteHost?.trim() || isSshIMessageCliWrapper(cliPath)) {
+    return false;
+  }
+  return cliPath === "imsg" || path.basename(cliPath) === "imsg";
+}
+
+function resolveChatDbLookupPath(params: {
+  cliPath: string;
+  dbPath?: string;
+  remoteHost?: string;
+}): string | undefined {
   const configured = params.dbPath?.trim();
   if (configured) {
     return configured;
   }
-  if (!isLocalIMessageCliPath(params.cliPath)) {
+  if (!isLocalIMessageCliPath({ cliPath: params.cliPath, remoteHost: params.remoteHost })) {
     return undefined;
   }
   const home = safeHomeDir();
@@ -717,7 +754,11 @@ export async function sendMessageIMessage(
     });
   const cliPath = opts.cliPath?.trim() || account.config.cliPath?.trim() || "imsg";
   const dbPath = opts.dbPath?.trim() || account.config.dbPath?.trim();
-  const chatDbLookupPath = resolveChatDbLookupPath({ cliPath, dbPath });
+  const chatDbLookupPath = resolveChatDbLookupPath({
+    cliPath,
+    dbPath,
+    remoteHost: account.config.remoteHost,
+  });
   const target = parseIMessageTarget(opts.chatId ? formatIMessageChatTarget(opts.chatId) : to);
   const service =
     opts.service ??
