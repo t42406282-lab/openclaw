@@ -70,4 +70,23 @@ describe("bench-cli-startup", () => {
     expect(testing.parsePositiveInt("1", 5)).toBe(1);
     expect(testing.parseNonNegativeInt("0", 1)).toBe(0);
   });
+
+  it("writes a config fixture for config get benchmarks", () => {
+    expect(
+      testing.buildConfigFixture({
+        id: "configGetGatewayPort",
+        name: "config get gateway.port",
+        args: ["config", "get", "gateway.port"],
+        presets: ["real"],
+      }),
+    ).toEqual({ gateway: { port: 32123 } });
+    expect(
+      testing.buildConfigFixture({
+        id: "gatewayHealthJson",
+        name: "gateway health --json",
+        args: ["gateway", "health", "--json"],
+        presets: ["real"],
+      }),
+    ).toBeNull();
+  });
 });
