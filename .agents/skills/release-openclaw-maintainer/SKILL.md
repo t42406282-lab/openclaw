@@ -23,9 +23,10 @@ Use this skill for release and publish-time workflow. Load `$release-private` if
   green. Then branch from that commit so regular development can continue on
   `main` while release validation runs.
 - Before release branching, commit any dirty files in coherent groups, push,
-  pull/rebase, then generate `CHANGELOG.md` on `main` from merged PRs and all
-  direct commits since the last reachable release tag. Commit/push/pull that
-  changelog rewrite immediately before creating the release branch.
+  pull/rebase, then generate the per-version `CHANGELOG.md` on `main` from
+  merged PRs and all direct commits since the last reachable release tag.
+  Commit/push/pull that changelog rewrite immediately before creating the
+  release branch.
 - During release planning, inspect both `src/plugins/compat/registry.ts` and
   `src/commands/doctor/shared/deprecation-compat.ts` before branching and again
   before final publish. For every deprecated or removal-pending compatibility
@@ -140,9 +141,10 @@ Use this skill for release and publish-time workflow. Load `$release-private` if
 
 - `CHANGELOG.md` is release-owned. Normal PRs and direct `main` fixes should
   not edit it.
-- Before release branching or tagging, rewrite the target `CHANGELOG.md`
-  section from history, not existing notes. Use the last reachable stable or
-  beta release tag as the base, then inspect every commit through the target
+- `CHANGELOG.md` contains the current stable-base release section only.
+- Before release branching or tagging, rewrite `CHANGELOG.md` as current
+  release notes from history, not existing notes. Use the last reachable stable
+  or beta release tag as the base, then inspect every commit through the target
   release SHA.
 - Include both merged PR commits and direct commits on `main`. Direct commits
   matter: infer notes from their subject, body, touched files, linked issues,
@@ -175,9 +177,10 @@ Use this skill for release and publish-time workflow. Load `$release-private` if
   - use release notes from the stable base `CHANGELOG.md` version section
     (`## YYYY.M.D`), not a beta-specific heading
   - attach at least the zip and dSYM zip, plus dmg if available
-- Keep the top version entries in `CHANGELOG.md` sorted by impact:
-  - `### Changes` first
-  - `### Fixes` deduped with user-facing fixes first
+- Keep the current version section in `CHANGELOG.md` sorted by impact:
+  - `### Highlights` first with broad user wins
+  - `### Changes` next for capabilities and behavior changes
+  - `### Fixes` last, deduped with user-facing fixes first
 
 ## Write release tweets
 
@@ -191,7 +194,7 @@ live`; keep it clearly beta and avoid implying stable promotion.
 - Lead with user-visible capabilities, then important integrations, then
   reliability/security/install fixes. Compress "lots of fixes" into one
   readable bullet.
-- Read the full changelog section before drafting. Do not lead with coverage,
+- Read the matching changelog section before drafting. Do not lead with coverage,
   CI, validation, or internal release mechanics unless the release is explicitly
   about those. Peter prefers concrete user wins: features, integrations,
   workflow improvements, and practical reliability fixes.
@@ -560,8 +563,9 @@ node --import tsx scripts/openclaw-npm-postpublish-verify.ts <published-version>
    worktree is clean.
 4. Pull latest `main` and confirm current `main` CI is green.
 5. Run `/changelog` for the stable base target version on `main`, commit the
-   changelog rewrite immediately, push, and pull/rebase. For beta releases,
-   keep the changelog heading as `## YYYY.M.D`, not `## YYYY.M.D-beta.N`.
+   per-version changelog rewrite immediately, push, and pull/rebase. For beta
+   releases, keep the changelog heading as `## YYYY.M.D`, not
+   `## YYYY.M.D-beta.N`.
 6. Create `release/YYYY.M.D` from that post-changelog `main` commit.
 7. Make every repo version location match the beta tag before creating it.
 8. Commit release preparation changes on the release branch and push the branch.

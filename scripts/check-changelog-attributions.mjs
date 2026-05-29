@@ -26,6 +26,13 @@ export const CHANGELOG_THANKS_REQUIRE_HUMAN_CREDIT_HANDLE_SUFFIXES = ["[bot]"];
 
 const THANKS_PATTERN = /\bThanks\b/iu;
 const THANKED_HANDLE_PATTERN = /@([-_/A-Za-z0-9]+(?:\[bot\])?)/giu;
+const CHANGELOG_TITLE = "# Changelog";
+const CHANGELOG_DOCS_LINK = "Docs: https://docs.openclaw.ai";
+const UNRELEASED_HEADING_PATTERN = /^##\s+Unreleased(?:\s+.*)?$/u;
+const STABLE_RELEASE_HEADING_PATTERN =
+  /^##\s+([0-9]{4}\.[1-9][0-9]*\.[1-9][0-9]*)(?:\s+.*)?$/u;
+const PRERELEASE_HEADING_PATTERN =
+  /^##\s+([0-9]{4}\.[1-9][0-9]*\.[1-9][0-9]*-(?:alpha|beta)\.[1-9][0-9]*)(?:\s+.*)?$/u;
 
 export function isForbiddenChangelogThanksHandle(handle, options = {}) {
   const { strictBotHandle = false } = options;
@@ -82,6 +89,124 @@ export function findForbiddenChangelogThanks(content) {
     .filter(Boolean);
 }
 
+export function findChangelogShapeViolations(content) {
+  const releaseHeadings = [];
+  const unreleasedHeadings = [];
+  const violations = [];
+  const lines = content.split(/\r?\n/u).map((line, index) =>
+    index === 0 ? line.replace(/^\uFEFF/u, "") : line,
+  );
+  const firstContentLineIndex = lines.findIndex((line) => line.trim() !== "");
+  if (firstContentLineIndex === -1 || lines[firstContentLineIndex] !== CHANGELOG_TITLE) {
+    violations.push({
+      line: firstContentLineIndex === -1 ? 1 : firstContentLineIndex + 1,
+      text: lines[firstContentLineIndex] ?? "",
+      reason: `CHANGELOG.md must start with ${CHANGELOG_TITLE}.`,
+    });
+  }
+
+  const firstLevelTwoIndex = lines.findIndex((line) => line.startsWith("## "));
+  const docsLinkIndex = lines.findIndex((line, index) => {
+    return (
+      line === CHANGELOG_DOCS_LINK &&
+      (firstLevelTwoIndex === -1 || index < firstLevelTwoIndex)
+    );
+  });
+  if (docsLinkIndex === -1) {
+    violations.push({
+      line: 1,
+      text: "",
+      reason: `CHANGELOG.md must keep the docs link: ${CHANGELOG_DOCS_LINK}.`,
+    });
+  }
+
+  for (const [index, text] of lines.entries()) {
+    const line = index + 1;
+    if (UNRELEASED_HEADING_PATTERN.test(text)) {
+      unreleasedHeadings.push({ line, text });
+      continue;
+    }
+
+    const prereleaseMatch = PRERELEASE_HEADING_PATTERN.exec(text);
+    if (prereleaseMatch) {
+      violations.push({
+        line,
+        text,
+        reason: `Prerelease changelog heading ${prereleaseMatch[1]} must use the stable base version heading.`,
+      });
+      continue;
+    }
+
+    const stableMatch = STABLE_RELEASE_HEADING_PATTERN.exec(text);
+    if (stableMatch) {
+      releaseHeadings.push({ line, version: stableMatch[1], text });
+    }
+  }
+
+  for (const heading of unreleasedHeadings) {
+    violations.push({
+      line: heading.line,
+      text: heading.text,
+      reason: "CHANGELOG.md must not contain ## Unreleased; release notes are regenerated from history.",
+    });
+  }
+
+  if (releaseHeadings.length === 0) {
+    violations.push({
+      line: 1,
+      text: "",
+      reason: "CHANGELOG.md must contain one stable-base ## YYYY.M.D release section.",
+    });
+  }
+  for (const heading of releaseHeadings.slice(1)) {
+    violations.push({
+      line: heading.line,
+      text: heading.text,
+      reason: `CHANGELOG.md may contain at most one dated release section; found extra section ${heading.version}.`,
+    });
+  }
+
+  const unreleasedLine = unreleasedHeadings[0]?.line;
+  const releaseLine = releaseHeadings[0]?.line;
+  if (releaseHeadings.length > 0) {
+    const releaseStartIndex = releaseHeadings[0].line - 1;
+    const releaseEndIndex =
+      lines.findIndex((line, index) => index > releaseStartIndex && line.startsWith("## ")) ??
+      -1;
+    const releaseLines = lines.slice(
+      releaseStartIndex + 1,
+      releaseEndIndex === -1 ? lines.length : releaseEndIndex,
+    );
+    const subsectionOrder = releaseLines
+      .map((line, index) => ({ line, sourceLine: releaseStartIndex + index + 2 }))
+      .filter(({ line }) => line.startsWith("### "))
+      .map(({ line, sourceLine }) => ({ name: line.replace(/^###\s+/u, ""), line: sourceLine }));
+    const requiredSubsections = ["Highlights", "Changes", "Fixes"];
+    let lastIndex = -1;
+    for (const subsection of requiredSubsections) {
+      const index = subsectionOrder.findIndex((entry) => entry.name === subsection);
+      if (index === -1) {
+        violations.push({
+          line: releaseHeadings[0].line,
+          text: releaseHeadings[0].text,
+          reason: `Current release section must contain ### ${subsection}.`,
+        });
+        continue;
+      }
+      if (index < lastIndex) {
+        violations.push({
+          line: subsectionOrder[index].line,
+          text: `### ${subsectionOrder[index].name}`,
+          reason: "Current release subsections must be ordered Highlights, Changes, Fixes.",
+        });
+      }
+      lastIndex = Math.max(lastIndex, index);
+    }
+  }
+
+  return violations;
+}
+
 export async function main(argv = process.argv.slice(2)) {
   if (argv[0] === "--is-forbidden-handle") {
     process.exitCode = isForbiddenChangelogThanksHandle(argv[1] ?? "", {
@@ -100,21 +225,36 @@ export async function main(argv = process.argv.slice(2)) {
   const changelogPath = argv[0] ?? "CHANGELOG.md";
   const absolutePath = path.resolve(process.cwd(), changelogPath);
   const content = fs.readFileSync(absolutePath, "utf8");
-  const violations = findForbiddenChangelogThanks(content);
-  if (violations.length === 0) {
+  const thanksViolations = findForbiddenChangelogThanks(content);
+  const shapeViolations = findChangelogShapeViolations(content);
+  if (thanksViolations.length === 0 && shapeViolations.length === 0) {
     return;
   }
 
-  console.error("Forbidden changelog thanks attribution:");
-  for (const violation of violations) {
-    const relativePath = path.relative(process.cwd(), absolutePath) || changelogPath;
+  const relativePath = path.relative(process.cwd(), absolutePath) || changelogPath;
+  if (thanksViolations.length > 0) {
+    console.error("Forbidden changelog thanks attribution:");
+  }
+  for (const violation of thanksViolations) {
     console.error(`- ${relativePath}:${violation.line} uses Thanks @${violation.handle}`);
   }
-  console.error(
-    `Use a credited external GitHub username instead of ${FORBIDDEN_CHANGELOG_THANKS_HANDLES.map(
-      (handle) => `@${handle}`,
-    ).join(", ")}.`,
-  );
+  if (thanksViolations.length > 0) {
+    console.error(
+      `Use a credited external GitHub username instead of ${FORBIDDEN_CHANGELOG_THANKS_HANDLES.map(
+        (handle) => `@${handle}`,
+      ).join(", ")}.`,
+    );
+  }
+
+  if (shapeViolations.length > 0) {
+    console.error("Invalid changelog shape:");
+    for (const violation of shapeViolations) {
+      console.error(`- ${relativePath}:${violation.line}: ${violation.reason}`);
+    }
+    console.error(
+      "Keep CHANGELOG.md to one stable-base ## YYYY.M.D section.",
+    );
+  }
   process.exitCode = 1;
 }
 

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  findChangelogShapeViolations,
   findForbiddenChangelogThanks,
   isForbiddenChangelogThanksHandle,
   requiresExplicitHumanChangelogThanks,
@@ -24,7 +25,31 @@ function createRepoWithPrChangelogDiff(entry: string): string {
   run(repo, "git", ["init", "-q", "--initial-branch=main"]);
   run(repo, "git", ["config", "user.email", "test@example.com"]);
   run(repo, "git", ["config", "user.name", "Test User"]);
-  writeFileSync(repo + "/CHANGELOG.md", "# Changelog\n\n## Unreleased\n\n### Fixes\n\n", "utf8");
+  const baseChangelog = [
+    "# Changelog",
+    "",
+    "Docs: https://docs.openclaw.ai",
+    "",
+    "## Unreleased",
+    "",
+    "### Fixes",
+    "",
+    "## 2026.5.28",
+    "",
+    "### Highlights",
+    "",
+    "- Existing highlight.",
+    "",
+    "### Changes",
+    "",
+    "- Existing change.",
+    "",
+    "### Fixes",
+    "",
+    "- Existing fix.",
+    "",
+  ].join("\n");
+  writeFileSync(repo + "/CHANGELOG.md", baseChangelog, "utf8");
   run(repo, "git", ["add", "CHANGELOG.md"]);
   run(repo, "git", ["commit", "-qm", "seed"]);
   const baseSha = run(repo, "git", ["rev-parse", "HEAD"]);
@@ -34,7 +59,7 @@ function createRepoWithPrChangelogDiff(entry: string): string {
   run(repo, "git", ["checkout", "-qb", "feature"]);
   writeFileSync(
     repo + "/CHANGELOG.md",
-    `# Changelog\n\n## Unreleased\n\n### Fixes\n\n${entry}\n`,
+    baseChangelog.replace("### Fixes\n\n## 2026.5.28", `### Fixes\n\n${entry}\n\n## 2026.5.28`),
     "utf8",
   );
   run(repo, "git", ["add", "CHANGELOG.md"]);
@@ -86,6 +111,168 @@ describe("check-changelog-attributions", () => {
         "- User-facing fix. Fixes #123. Thanks @external-contributor and @other-user.",
       ),
     ).toStrictEqual([]);
+  });
+
+  it("allows one stable-base version section without Unreleased", () => {
+    const content = [
+      "# Changelog",
+      "",
+      "Docs: https://docs.openclaw.ai",
+      "",
+      "## 2026.5.28",
+      "",
+      "### Highlights",
+      "",
+      "- Released highlight.",
+      "",
+      "### Changes",
+      "",
+      "- Released change.",
+      "",
+      "### Fixes",
+      "",
+      "- Released fix.",
+    ].join("\n");
+
+    expect(findChangelogShapeViolations(content)).toStrictEqual([]);
+  });
+
+  it("rejects Unreleased sections", () => {
+    const content = [
+      "# Changelog",
+      "",
+      "Docs: https://docs.openclaw.ai",
+      "",
+      "## Unreleased",
+      "",
+      "### Fixes",
+      "",
+      "- Pending fix.",
+      "",
+      "## 2026.5.28",
+      "",
+      "### Highlights",
+      "",
+      "- Released highlight.",
+      "",
+      "### Changes",
+      "",
+      "- Released change.",
+      "",
+      "### Fixes",
+      "",
+      "- Released fix.",
+    ].join("\n");
+
+    expect(findChangelogShapeViolations(content)).toStrictEqual([
+      {
+        line: 5,
+        text: "## Unreleased",
+        reason: "CHANGELOG.md must not contain ## Unreleased; release notes are regenerated from history.",
+      },
+    ]);
+  });
+
+  it("rejects cumulative and prerelease-specific changelog sections", () => {
+    const content = [
+      "# Changelog",
+      "",
+      "Docs: https://docs.openclaw.ai",
+      "",
+      "## 2026.5.28",
+      "",
+      "### Highlights",
+      "",
+      "- Released highlight.",
+      "",
+      "### Changes",
+      "",
+      "- Released change.",
+      "",
+      "### Fixes",
+      "",
+      "- Released fix.",
+      "",
+      "## 2026.5.28-beta.1",
+      "",
+      "## 2026.5.27",
+    ].join("\n");
+
+    expect(findChangelogShapeViolations(content)).toStrictEqual([
+      {
+        line: 19,
+        text: "## 2026.5.28-beta.1",
+        reason: "Prerelease changelog heading 2026.5.28-beta.1 must use the stable base version heading.",
+      },
+      {
+        line: 21,
+        text: "## 2026.5.27",
+        reason: "CHANGELOG.md may contain at most one dated release section; found extra section 2026.5.27.",
+      },
+    ]);
+  });
+
+  it("requires the per-version changelog title, docs link, and release subsections", () => {
+    const content = [
+      "# Release Notes",
+      "",
+      "## 2026.5.28",
+      "",
+      "### Changes",
+      "",
+      "- Released change.",
+      "",
+      "### Fixes",
+      "",
+      "- Released fix.",
+    ].join("\n");
+
+    expect(findChangelogShapeViolations(content)).toStrictEqual([
+      {
+        line: 1,
+        text: "# Release Notes",
+        reason: "CHANGELOG.md must start with # Changelog.",
+      },
+      {
+        line: 1,
+        text: "",
+        reason: "CHANGELOG.md must keep the docs link: Docs: https://docs.openclaw.ai.",
+      },
+      {
+        line: 3,
+        text: "## 2026.5.28",
+        reason: "Current release section must contain ### Highlights.",
+      },
+    ]);
+  });
+
+  it("keeps the release changelog skill on the per-version output contract", () => {
+    const changelogSkill = readFileSync(
+      ".agents/skills/openclaw-changelog-update/SKILL.md",
+      "utf8",
+    );
+    const releaseSkill = readFileSync(
+      ".agents/skills/release-openclaw-maintainer/SKILL.md",
+      "utf8",
+    );
+
+    expect(changelogSkill).toContain("Rewrite `CHANGELOG.md` as current release notes");
+    expect(changelogSkill).toContain("preserve the top `# Changelog` title and docs link");
+    expect(changelogSkill).toContain("remove older `## YYYY.M.D` sections");
+    expect(changelogSkill).toContain("do not keep `## Unreleased`");
+    expect(changelogSkill).toContain("### Highlights");
+    expect(changelogSkill).toContain("### Changes");
+    expect(changelogSkill).toContain("### Fixes");
+    expect(changelogSkill).toContain("preserving issue/PR refs and human thanks");
+
+    expect(releaseSkill).toContain(
+      "`CHANGELOG.md` contains the current stable-base release section",
+    );
+    expect(releaseSkill).toContain(
+      "`CHANGELOG.md` contains the current stable-base release section only.",
+    );
+    expect(releaseSkill).toContain("GitHub release and prerelease bodies must use the full matching");
+    expect(releaseSkill).toContain("`CHANGELOG.md` version section");
   });
 
   it("checks every thanked handle on a changelog line", () => {

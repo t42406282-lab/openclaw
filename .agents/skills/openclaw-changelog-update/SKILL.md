@@ -11,9 +11,10 @@ ordering, and audit discipline.
 
 ## Goal
 
-Rewrite the target `CHANGELOG.md` version section from history, not from stale
-draft notes. Produce user-facing release notes sorted by user interest while
-preserving issue/PR refs and thanks.
+Rewrite `CHANGELOG.md` as current release notes only. Use history rather than
+stale draft notes. Produce a per-version file whose dated section more or less
+matches the shape of prior release sections, sorted by user interest while
+preserving issue/PR refs and human thanks.
 
 ## Inputs
 
@@ -34,12 +35,13 @@ preserving issue/PR refs and thanks.
    - also inspect `--since='24 hours ago'` when main moved during the release.
 3. Read linked PRs/issues or diffs for ambiguous commits. Direct commits matter;
    infer notes from subject, body, touched files, tests, and nearby commits.
-4. Rewrite one stable-base section only:
+4. Rewrite `CHANGELOG.md` as current release notes:
+   - preserve the top `# Changelog` title and docs link
+   - do not keep `## Unreleased`; release notes are regenerated from history
    - use `## YYYY.M.D`
    - do not create beta-specific headings
-   - do not leave a stale `## Unreleased` section above the target release
-   - if `Unreleased` contains release-bound notes, fold them into the target
-     section instead of deleting them
+   - remove older `## YYYY.M.D` sections from the file
+   - keep beta release notes under the stable base heading
 5. Section shape:
    - `### Highlights`: 5-8 bullets, broad user wins first
    - `### Changes`: new capabilities and behavior changes
