@@ -6,6 +6,7 @@ import {
 import { logVerbose } from "openclaw/plugin-sdk/runtime-env";
 import { sleep } from "openclaw/plugin-sdk/text-utility-runtime";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import type { WhatsAppInboundAdmission } from "../inbound/admission.js";
 import { loadWebMedia } from "../media.js";
 import { cacheInboundMessageMeta } from "../quoted-message.js";
 import type { WebInboundMsg } from "./types.js";
@@ -51,6 +52,7 @@ vi.mock("../media.js", () => ({
 
 let deliverWebReply: typeof import("./deliver-reply.js").deliverWebReply;
 let whatsappOutbound: typeof import("../outbound-adapter.js").whatsappOutbound;
+const GROUP_JID = "120363-deliver@g.us";
 
 function acceptedSendResult(kind: "media" | "text", id: string) {
   return {
@@ -78,9 +80,56 @@ function unacceptedSendResult(kind: "media" | "text") {
   };
 }
 
-function makeMsg(): WebInboundMsg {
+function makeAdmission(): WhatsAppInboundAdmission {
   return {
-    from: "+10000000000",
+    accountId: "work",
+    account: {
+      accountId: "work",
+      authDir: "/tmp/auth",
+      enabled: true,
+      sendReadReceipts: true,
+    },
+    conversation: {
+      kind: "group",
+      id: GROUP_JID,
+      groupSessionId: GROUP_JID,
+      requireMention: false,
+    },
+    sender: {
+      id: "+10000000000",
+      dmSenderId: GROUP_JID,
+      isSamePhone: false,
+      isDmSenderSamePhone: false,
+    },
+    senderAccess: {
+      allowed: true,
+      decision: "allowed",
+    },
+    resolvedPolicy: {},
+  } as unknown as WhatsAppInboundAdmission;
+}
+
+function makeMsg(): WebInboundMsg {
+  const reply = vi.fn(async () => acceptedSendResult("text", "reply-sent-1"));
+  const sendMedia = vi.fn(async () => acceptedSendResult("media", "media-sent-1"));
+  return {
+    admission: makeAdmission(),
+    event: {
+      id: "msg-1",
+    },
+    payload: {
+      body: "latest batch body",
+    },
+    platform: {
+      chatJid: "15551234567@s.whatsapp.net",
+      recipientJid: "+20000000000",
+      senderJid: "222@s.whatsapp.net",
+      sendComposing: vi.fn(async () => undefined),
+      reply,
+      sendMedia,
+    },
+    from: GROUP_JID,
+    conversationId: GROUP_JID,
     to: "+20000000000",
     accountId: "work",
     chatId: "15551234567@s.whatsapp.net",
@@ -88,8 +137,8 @@ function makeMsg(): WebInboundMsg {
     id: "msg-1",
     body: "latest batch body",
     senderJid: "222@s.whatsapp.net",
-    reply: vi.fn(async () => acceptedSendResult("text", "reply-sent-1")),
-    sendMedia: vi.fn(async () => acceptedSendResult("media", "media-sent-1")),
+    reply,
+    sendMedia,
   } as unknown as WebInboundMsg;
 }
 
