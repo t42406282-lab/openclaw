@@ -21,7 +21,10 @@ const agentTurnTimeoutSeconds = readPositiveIntEnv(
   "OPENCLAW_LIVE_PLUGIN_TOOL_TIMEOUT_SECONDS",
   300,
 );
+const SCAN_CHUNK_BYTES = 64 * 1024;
+const SCAN_CARRY_CHARS = 256;
 const ERROR_DETAIL_TAIL_BYTES = 16 * 1024;
+const SESSION_FILE_LIST_LIMIT = 20;
 
 function requireEnv(name) {
   const value = process.env[name];
@@ -150,17 +153,10 @@ function writeJson(file, value) {
 }
 
 function installRecords() {
-  return withSqliteDatabase(stateDatabasePath(), (db) => {
-    const row = db
-      .prepare(
-        "SELECT install_records_json FROM installed_plugin_index WHERE index_key = 'current'",
-      )
-      .get();
-    if (!row?.install_records_json) {
-      return {};
-    }
-    return JSON.parse(String(row.install_records_json));
-  });
+  const indexPath = path.join(stateDir(), "plugins", "installs.json");
+  const index = fs.existsSync(indexPath) ? readJson(indexPath) : {};
+  const cfg = fs.existsSync(configPath()) ? readJson(configPath()) : {};
+  return index.installRecords || index.records || cfg.plugins?.installs || {};
 }
 
 function pluginInstallPath() {
@@ -361,10 +357,13 @@ function assertAgentTurn() {
       `live agent reply did not contain tool slug ${expected}:\nstdout tail=${tailText(stdout, ERROR_DETAIL_TAIL_BYTES)}\nstderr tail=${stderrTail}`,
     );
   }
-  const transcript = readMainAgentTranscript();
-  if (!transcript.text.includes(toolName) || !transcript.text.includes(expected)) {
+  const sessionsDir = path.join(stateDir(), "agents", "main", "sessions");
+  const scan = scanSessionTranscripts(sessionsDir, [toolName, expected]);
+  if (scan.pendingNeedles.size > 0) {
+    const checkedFiles = scan.checkedFiles.length > 0 ? scan.checkedFiles.join(", ") : "<none>";
+    const missingDir = scan.missingDir ? " sessions directory was missing." : "";
     throw new Error(
-      `SQLite session transcript did not show ${toolName} returning ${expected} after checking ${transcript.eventCount} event(s)`,
+      `session transcript did not show ${toolName} returning ${expected}; missing ${Array.from(scan.pendingNeedles).join(", ")} after checking ${scan.filesChecked} jsonl file(s): ${checkedFiles}.${missingDir}`,
     );
   }
 }

@@ -173,7 +173,7 @@ async function selectedManifestEntries() {
 }
 
 function assertInstalled(pluginId, pluginDir, requiresConfig) {
-  const configPath = path.join(process.env.HOME, ".openclaw", "openclaw.json");
+  const configPath = path.join(resolveStateDir(), "openclaw.json");
   const config = readJson(configPath);
   const records = readInstalledPluginRecords();
   const record = records[pluginId];
@@ -216,7 +216,8 @@ function assertInstalled(pluginId, pluginDir, requiresConfig) {
 }
 
 function assertUninstalled(pluginId, pluginDir) {
-  const configPath = path.join(process.env.HOME, ".openclaw", "openclaw.json");
+  const stateDir = resolveStateDir();
+  const configPath = path.join(stateDir, "openclaw.json");
   const config = fs.existsSync(configPath) ? readJson(configPath) : {};
   const records = readInstalledPluginRecords();
   if (records[pluginId]) {

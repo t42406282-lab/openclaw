@@ -2,35 +2,13 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { OPENCLAW_AGENT_SCHEMA_SQL } from "../../src/state/openclaw-agent-schema.generated.js";
 
 const ASSERTIONS_SCRIPT = "scripts/e2e/lib/live-plugin-tool/assertions.mjs";
 
 function writeJson(filePath: string, value: unknown) {
   mkdirSync(path.dirname(filePath), { recursive: true });
   writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-}
-
-function writeMainAgentTranscript(root: string, eventTexts: string[]) {
-  const databasePath = path.join(root, "state", "agents", "main", "agent", "openclaw-agent.sqlite");
-  mkdirSync(path.dirname(databasePath), { recursive: true });
-  const db = new DatabaseSync(databasePath);
-  try {
-    db.exec(OPENCLAW_AGENT_SCHEMA_SQL);
-    db.prepare(
-      "INSERT INTO sessions (session_id, session_key, created_at, updated_at) VALUES (?, ?, ?, ?)",
-    ).run("session-1", "agent:main:test", 1000, 1000);
-    const insertEvent = db.prepare(
-      "INSERT INTO transcript_events (session_id, seq, event_json, created_at) VALUES (?, ?, ?, ?)",
-    );
-    eventTexts.forEach((text, index) => {
-      insertEvent.run("session-1", index, JSON.stringify({ text }), 1000 + index);
-    });
-  } finally {
-    db.close();
-  }
 }
 
 function runAssertion(root: string, env: Record<string, string> = {}) {
@@ -89,17 +67,25 @@ describe("live plugin tool assertions", () => {
     }
   });
 
-  it("reads large SQLite session transcript events", () => {
+  it("streams session transcripts across chunk boundaries", () => {
     const root = mkdtempSync(path.join(tmpdir(), "openclaw-live-plugin-tool-"));
+    const sessionsDir = path.join(root, "state", "agents", "main", "sessions");
 
     try {
       writeJson(path.join(root, "agent.json"), {
         payloads: [{ text: "live-plugin-slug" }],
       });
-      writeMainAgentTranscript(root, [
-        `${"x".repeat(64 * 1024 - "e2e_slug_".length)}e2e_slug_probe`,
-        `${"x".repeat(64 * 1024 - "live-plugin-".length)}live-plugin-slug`,
-      ]);
+      mkdirSync(sessionsDir, { recursive: true });
+      writeFileSync(
+        path.join(sessionsDir, "tool.jsonl"),
+        `${"x".repeat(64 * 1024 - "e2e_slug_".length)}e2e_slug_probe\n`,
+        "utf8",
+      );
+      writeFileSync(
+        path.join(sessionsDir, "reply.jsonl"),
+        `${"x".repeat(64 * 1024 - "live-plugin-".length)}live-plugin-slug\n`,
+        "utf8",
+      );
 
       const result = runAssertion(root);
 
@@ -143,18 +129,25 @@ describe("live plugin tool assertions", () => {
 
   it("does not dump session transcript contents when a transcript check fails", () => {
     const root = mkdtempSync(path.join(tmpdir(), "openclaw-live-plugin-tool-"));
+    const sessionsDir = path.join(root, "state", "agents", "main", "sessions");
 
     try {
       writeJson(path.join(root, "agent.json"), {
         payloads: [{ text: "live-plugin-slug" }],
       });
-      writeMainAgentTranscript(root, [`DO_NOT_DUMP_SESSION_CONTENT${"x".repeat(70 * 1024)}`]);
+      mkdirSync(sessionsDir, { recursive: true });
+      writeFileSync(
+        path.join(sessionsDir, "session.jsonl"),
+        `DO_NOT_DUMP_SESSION_CONTENT${"x".repeat(70 * 1024)}\n`,
+        "utf8",
+      );
 
       const result = runAssertion(root);
 
       expect(result.status).not.toBe(0);
-      expect(result.stderr).toContain("SQLite session transcript did not show");
-      expect(result.stderr).toContain("after checking 1 event(s)");
+      expect(result.stderr).toContain("session transcript did not show");
+      expect(result.stderr).toContain("after checking 1 jsonl file(s)");
+      expect(result.stderr).toContain("session.jsonl");
       expect(result.stderr).not.toContain("DO_NOT_DUMP_SESSION_CONTENT");
     } finally {
       rmSync(root, { force: true, recursive: true });

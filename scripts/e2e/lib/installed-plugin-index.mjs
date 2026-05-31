@@ -133,5 +133,14 @@ export function writeInstalledPluginIndex(index) {
 }
 
 export function readInstalledPluginRecords() {
-  return readInstalledPluginIndex().installRecords ?? {};
+  const sqliteIndex = readInstalledPluginIndex();
+  if (sqliteIndex.installRecords) {
+    return sqliteIndex.installRecords;
+  }
+  const legacyIndexPath = path.join(openclawStateDir(), "plugins", "installs.json");
+  if (!fs.existsSync(legacyIndexPath)) {
+    return {};
+  }
+  const legacyIndex = JSON.parse(fs.readFileSync(legacyIndexPath, "utf8"));
+  return legacyIndex.installRecords ?? legacyIndex.records ?? {};
 }
