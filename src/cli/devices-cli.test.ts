@@ -1,3 +1,4 @@
+// oxlint-disable typescript/no-unsafe-type-assertion -- Tests inspect mocked device pairing payloads whose runtime shapes are part of the assertions.
 import { Command } from "commander";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { stripAnsi } from "../../packages/terminal-core/src/ansi.js";

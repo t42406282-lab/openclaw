@@ -1,3 +1,4 @@
+// oxlint-disable typescript/no-unsafe-type-assertion -- Tests inspect mocked config/gateway payloads whose shapes are validated by command handlers.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import {

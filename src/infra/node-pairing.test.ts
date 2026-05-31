@@ -1,3 +1,4 @@
+// oxlint-disable typescript/no-unsafe-type-assertion -- Tests inspect node-pairing fixtures whose runtime shapes are part of the assertions.
 import fs from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createSuiteTempRootTracker } from "../test-helpers/temp-dir.js";

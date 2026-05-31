@@ -1,3 +1,4 @@
+// oxlint-disable typescript/no-unsafe-type-assertion -- Tests inspect mocked node wake payloads whose runtime shapes are part of the assertions.
 import { MAX_TIMER_TIMEOUT_MS } from "@openclaw/normalization-core/number-coercion";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ErrorCodes } from "../../../packages/gateway-protocol/src/index.js";

@@ -1,3 +1,4 @@
+// oxlint-disable typescript/no-unsafe-type-assertion -- Tests inspect mocked channel auth payloads whose shapes are validated at the command boundary.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runChannelLogin, runChannelLogout } from "./channel-auth.js";
 

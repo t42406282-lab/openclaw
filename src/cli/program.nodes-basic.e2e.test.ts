@@ -1,3 +1,4 @@
+// oxlint-disable typescript/no-unsafe-type-assertion -- Tests inspect mocked program/gateway payloads whose runtime shapes are part of the assertions.
 import { Command } from "commander";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createIosNodeListResponse } from "./program.nodes-test-helpers.js";

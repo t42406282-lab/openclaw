@@ -117,6 +117,10 @@ type PendingNodeAction = {
 
 const pendingNodeActionsById = new Map<string, PendingNodeAction[]>();
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function normalizeBrowserProxyPath(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -141,20 +145,19 @@ function isPersistentBrowserProxyMutation(method: string, path: string): boolean
 }
 
 function isForbiddenBrowserProxyMutation(params: unknown): boolean {
-  if (!params || typeof params !== "object") {
+  if (!isRecord(params)) {
     return false;
   }
-  const candidate = params as { method?: unknown; path?: unknown };
-  const method = (normalizeOptionalString(candidate.method) ?? "").toUpperCase();
-  const path = normalizeOptionalString(candidate.path) ?? "";
+  const method = (normalizeOptionalString(params["method"]) ?? "").toUpperCase();
+  const path = normalizeOptionalString(params["path"]) ?? "";
   return Boolean(method && path && isPersistentBrowserProxyMutation(method, path));
 }
 
 function normalizePluginSurfaceRefreshParams(params: unknown): { surface: string } | undefined {
-  if (!params || typeof params !== "object") {
+  if (!isRecord(params)) {
     return undefined;
   }
-  const surface = normalizeOptionalString((params as { surface?: unknown }).surface);
+  const surface = normalizeOptionalString(params["surface"]);
   if (!surface) {
     return undefined;
   }
@@ -416,10 +419,7 @@ function emitTalkPttNodeEvent(params: {
   if (!TALK_PTT_COMMANDS.has(params.command)) {
     return;
   }
-  const payloadObj =
-    typeof params.payload === "object" && params.payload !== null
-      ? (params.payload as Record<string, unknown>)
-      : {};
+  const payloadObj = isRecord(params.payload) ? params.payload : {};
   const captureId = normalizeOptionalString(payloadObj.captureId) ?? randomUUID();
   const sessionId = `node:${params.nodeId}:talk:${captureId}`;
   const seq = (talkPttEventSeqBySessionId.get(sessionId) ?? 0) + 1;

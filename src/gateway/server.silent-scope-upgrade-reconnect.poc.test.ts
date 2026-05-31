@@ -1,3 +1,4 @@
+// oxlint-disable typescript/no-unsafe-type-assertion -- Tests inspect mocked reconnect payloads whose runtime shapes are part of the assertions.
 import { describe, expect, test, vi } from "vitest";
 import { WebSocket } from "ws";
 import {

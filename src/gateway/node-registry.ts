@@ -109,6 +109,33 @@ function normalizeString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getStringArrayProperty(value: object, key: string): string[] | undefined {
+  const raw = Reflect.get(value, key);
+  return Array.isArray(raw)
+    ? raw.filter((entry): entry is string => typeof entry === "string")
+    : undefined;
+}
+
+function getBooleanRecordProperty(value: object, key: string): Record<string, boolean> | undefined {
+  const raw = Reflect.get(value, key);
+  if (!isRecord(raw)) {
+    return undefined;
+  }
+  const entries = Object.entries(raw).filter(
+    (entry): entry is [string, boolean] => typeof entry[1] === "boolean",
+  );
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function getStringProperty(value: object, key: string): string | undefined {
+  const raw = Reflect.get(value, key);
+  return typeof raw === "string" ? raw : undefined;
+}
+
 function normalizeSystemRunTimeoutMs(value: unknown): number | null | undefined {
   if (value === undefined) {
     return undefined;
@@ -127,13 +154,13 @@ function resolvePendingSystemRunEvent(params: {
   if (params.command !== "system.run" || !params.params || typeof params.params !== "object") {
     return undefined;
   }
-  const obj = params.params as Record<string, unknown>;
-  const runId = normalizeString(obj.runId);
+  const obj = isRecord(params.params) ? params.params : {};
+  const runId = normalizeString(obj["runId"]);
   if (!runId) {
     return undefined;
   }
-  const timeoutMs = normalizeSystemRunTimeoutMs(obj.timeoutMs);
-  const sessionKey = normalizeString(obj.sessionKey);
+  const timeoutMs = normalizeSystemRunTimeoutMs(obj["timeoutMs"]);
+  const sessionKey = normalizeString(obj["sessionKey"]);
   return {
     runId,
     ...(sessionKey ? { sessionKey } : {}),
@@ -150,8 +177,8 @@ function withSystemRunEventRunId(params: { command: string; params?: unknown }):
   ) {
     return params.params;
   }
-  const obj = params.params as Record<string, unknown>;
-  if (normalizeString(obj.runId)) {
+  const obj = isRecord(params.params) ? params.params : {};
+  if (normalizeString(obj["runId"])) {
     return params.params;
   }
   return { ...obj, runId: randomUUID() };
@@ -167,31 +194,13 @@ export class NodeRegistry {
     const connect = client.connect;
     const nodeId = opts.nodeId?.trim() || resolveConnectNodeId(connect);
     const caps = Array.isArray(connect.caps) ? connect.caps : [];
-    const declaredCaps = Array.isArray((connect as { declaredCaps?: string[] }).declaredCaps)
-      ? ((connect as { declaredCaps?: string[] }).declaredCaps ?? [])
-      : caps;
-    const commands = Array.isArray((connect as { commands?: string[] }).commands)
-      ? ((connect as { commands?: string[] }).commands ?? [])
-      : [];
-    const declaredCommands = Array.isArray(
-      (connect as { declaredCommands?: string[] }).declaredCommands,
-    )
-      ? ((connect as { declaredCommands?: string[] }).declaredCommands ?? [])
-      : commands;
-    const permissions =
-      typeof (connect as { permissions?: Record<string, boolean> }).permissions === "object"
-        ? ((connect as { permissions?: Record<string, boolean> }).permissions ?? undefined)
-        : undefined;
+    const declaredCaps = getStringArrayProperty(connect, "declaredCaps") ?? caps;
+    const commands = getStringArrayProperty(connect, "commands") ?? [];
+    const declaredCommands = getStringArrayProperty(connect, "declaredCommands") ?? commands;
+    const permissions = getBooleanRecordProperty(connect, "permissions");
     const declaredPermissions =
-      typeof (connect as { declaredPermissions?: Record<string, boolean> }).declaredPermissions ===
-      "object"
-        ? ((connect as { declaredPermissions?: Record<string, boolean> }).declaredPermissions ??
-          undefined)
-        : permissions;
-    const pathEnv =
-      typeof (connect as { pathEnv?: string }).pathEnv === "string"
-        ? (connect as { pathEnv?: string }).pathEnv
-        : undefined;
+      getBooleanRecordProperty(connect, "declaredPermissions") ?? permissions;
+    const pathEnv = getStringProperty(connect, "pathEnv");
     const session: NodeSession = {
       nodeId,
       connId: client.connId,
@@ -201,8 +210,8 @@ export class NodeRegistry {
       displayName: connect.client.displayName,
       platform: connect.client.platform,
       version: connect.client.version,
-      coreVersion: (connect as { coreVersion?: string }).coreVersion,
-      uiVersion: (connect as { uiVersion?: string }).uiVersion,
+      coreVersion: getStringProperty(connect, "coreVersion"),
+      uiVersion: getStringProperty(connect, "uiVersion"),
       deviceFamily: connect.client.deviceFamily,
       modelIdentifier: connect.client.modelIdentifier,
       remoteIp: opts.remoteIp,

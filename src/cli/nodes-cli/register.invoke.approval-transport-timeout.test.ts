@@ -1,3 +1,4 @@
+// oxlint-disable typescript/no-unsafe-type-assertion -- Tests inspect mocked node invoke transport payloads whose runtime shapes are part of the assertions.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CLI_DEFAULT_OPERATOR_SCOPES } from "../../gateway/method-scopes.js";
 import { DEFAULT_EXEC_APPROVAL_TIMEOUT_MS } from "../../infra/exec-approvals.js";

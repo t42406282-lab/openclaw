@@ -1,3 +1,4 @@
+// oxlint-disable typescript/no-unsafe-type-assertion -- Tests inspect mocked node CLI payloads whose runtime shapes are part of coverage assertions.
 import { Command } from "commander";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerNodesCli } from "./nodes-cli.js";

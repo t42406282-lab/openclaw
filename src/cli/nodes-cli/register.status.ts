@@ -186,9 +186,15 @@ async function tryReadNodeList(opts: NodesRpcOpts): Promise<NodeListNode[] | nul
 }
 
 function sanitizePairedNodeForListJson(node: PairedNodeListRow): Omit<PairedNodeListRow, "token"> {
-  const copy: Record<string, unknown> = { ...node };
-  delete copy.token;
-  return copy as Omit<PairedNodeListRow, "token">;
+  const { token: _token, ...copy } = node;
+  return copy;
+}
+
+function isNodeDetailRow(value: { Field: string; Value: string } | null): value is {
+  Field: string;
+  Value: string;
+} {
+  return value !== null;
 }
 
 export function registerNodesStatusCommands(nodes: Command) {
@@ -368,7 +374,7 @@ export function registerNodesStatusCommands(nodes: Command) {
             pathEnv ? { Field: "PATH", Value: sanitizeTerminalText(pathEnv) } : null,
             { Field: "Status", Value: status },
             { Field: "Caps", Value: caps ? sanitizeTerminalText(caps.join(", ")) : "?" },
-          ].filter(Boolean) as Array<{ Field: string; Value: string }>;
+          ].filter(isNodeDetailRow);
 
           defaultRuntime.log(heading("Node"));
           defaultRuntime.log(

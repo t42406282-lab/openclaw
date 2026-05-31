@@ -125,17 +125,18 @@ const PLATFORM_DEFAULTS: Record<string, string[]> = {
 };
 
 type PlatformId = "ios" | "android" | "macos" | "windows" | "linux" | "unknown";
+type CanonicalPlatformId = Exclude<PlatformId, "unknown">;
 
-const CANONICAL_PLATFORM_IDS = new Set<Exclude<PlatformId, "unknown">>([
+const CANONICAL_PLATFORM_IDS: readonly CanonicalPlatformId[] = [
   "ios",
   "android",
   "macos",
   "windows",
   "linux",
-]);
+];
 
 const DEVICE_FAMILY_TOKEN_RULES: ReadonlyArray<{
-  id: Exclude<PlatformId, "unknown">;
+  id: CanonicalPlatformId;
   tokens: readonly string[];
 }> = [
   { id: "ios", tokens: ["iphone", "ipad", "ios"] },
@@ -145,17 +146,16 @@ const DEVICE_FAMILY_TOKEN_RULES: ReadonlyArray<{
   { id: "linux", tokens: ["linux"] },
 ] as const;
 
-function resolvePlatformIdByExactMatch(value: string): Exclude<PlatformId, "unknown"> | undefined {
-  if (CANONICAL_PLATFORM_IDS.has(value as Exclude<PlatformId, "unknown">)) {
-    return value as Exclude<PlatformId, "unknown">;
+function resolvePlatformIdByExactMatch(value: string): CanonicalPlatformId | undefined {
+  for (const id of CANONICAL_PLATFORM_IDS) {
+    if (id === value) {
+      return id;
+    }
   }
   return undefined;
 }
 
-function platformMatchesDeviceFamily(
-  platformId: Exclude<PlatformId, "unknown">,
-  family: string,
-): boolean {
+function platformMatchesDeviceFamily(platformId: CanonicalPlatformId, family: string): boolean {
   switch (platformId) {
     case "ios":
       return family === "" || /^(?:iphone|ipad|ios)$/.test(family);

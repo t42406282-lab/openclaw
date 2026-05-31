@@ -63,9 +63,9 @@ type DeviceTokenSummary = {
   revokedAtMs?: number;
 };
 
-type PendingDevice = {
-  requestId: string;
-  deviceId: string;
+type PendingDevice = Record<string, unknown> & {
+  requestId?: string;
+  deviceId?: string;
   publicKey?: string;
   displayName?: string;
   clientId?: string;
@@ -78,8 +78,8 @@ type PendingDevice = {
   ts?: number;
 };
 
-type PairedDevice = {
-  deviceId: string;
+type PairedDevice = Record<string, unknown> & {
+  deviceId?: string;
   publicKey?: string;
   displayName?: string;
   roles?: string[];
@@ -106,13 +106,13 @@ const FALLBACK_STATE_MISMATCH_MESSAGE =
   "Gateway requires device pairing, but local fallback pairing state does not contain the gateway request.";
 const OPERATOR_ROLE = "operator";
 const OPERATOR_SCOPE_PREFIX = "operator.";
-const KNOWN_NON_ADMIN_OPERATOR_SCOPES = new Set<OperatorScope>([
+const KNOWN_NON_ADMIN_OPERATOR_SCOPES: readonly OperatorScope[] = [
   "operator.approvals",
   "operator.pairing",
   "operator.read",
   "operator.talk.secrets",
   "operator.write",
-]);
+];
 
 const callGatewayCli = async (
   method: string,
@@ -212,10 +212,12 @@ function assertLocalFallbackMatchesGatewayRequest(
 
 function redactLocalPairedDevice(device: InfraPairedDevice): PairedDevice {
   const { tokens, ...rest } = device;
-  return {
-    ...(rest as unknown as PairedDevice),
-    tokens: summarizeDeviceTokens(tokens) as DeviceTokenSummary[] | undefined,
+  const tokenSummaries: DeviceTokenSummary[] | undefined = summarizeDeviceTokens(tokens);
+  const redacted: PairedDevice = {
+    ...rest,
+    tokens: tokenSummaries,
   };
+  return redacted;
 }
 
 async function listPairingWithFallback(opts: DevicesRpcOpts): Promise<DevicePairingList> {
@@ -340,11 +342,15 @@ async function approvePairingWithFallback(
 }
 
 function parseDevicePairingList(value: unknown): DevicePairingList {
-  const obj = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+  const obj = isRecord(value) ? value : {};
   return {
-    pending: Array.isArray(obj.pending) ? (obj.pending as PendingDevice[]) : [],
-    paired: Array.isArray(obj.paired) ? (obj.paired as PairedDevice[]) : [],
+    pending: Array.isArray(obj["pending"]) ? obj["pending"].filter(isRecord) : [],
+    paired: Array.isArray(obj["paired"]) ? obj["paired"].filter(isRecord) : [],
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function normalizeDeviceRoles(request: PendingDevice): string[] {
@@ -504,7 +510,7 @@ function resolvePendingOperatorApprovalScopes(
 }
 
 function isKnownNonAdminOperatorScope(scope: string): scope is OperatorScope {
-  return KNOWN_NON_ADMIN_OPERATOR_SCOPES.has(scope as OperatorScope);
+  return KNOWN_NON_ADMIN_OPERATOR_SCOPES.some((knownScope) => knownScope === scope);
 }
 
 function resolveApprovePairingScopesForRequest(

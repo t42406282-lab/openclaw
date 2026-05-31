@@ -13,6 +13,7 @@ import {
   type ExecPolicyScopeSnapshot,
 } from "../infra/exec-approvals-effective.js";
 import {
+  normalizeExecApprovals,
   readExecApprovalsSnapshot,
   saveExecApprovals,
   type ExecApprovalsAgent,
@@ -113,7 +114,9 @@ function loadSnapshotLocal(): ExecApprovalsSnapshot {
 function hasApprovalsFile(
   snapshot: ExecApprovalsSnapshot,
 ): snapshot is ExecApprovalsSnapshot & { file: ExecApprovalsFile } {
-  return !!snapshot.file && typeof snapshot.file === "object" && !Array.isArray(snapshot.file);
+  return (
+    Boolean(snapshot.file) && typeof snapshot.file === "object" && !Array.isArray(snapshot.file)
+  );
 }
 
 function isNativeExecApprovalsSnapshot(snapshot: ExecApprovalsSnapshot): boolean {
@@ -125,17 +128,16 @@ function isNativeExecApprovalsSnapshot(snapshot: ExecApprovalsSnapshot): boolean
 }
 
 function normalizeNativeExecApprovalPolicyInput(value: unknown): NativeExecApprovalPolicy {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     exitWithError("Host-native exec approvals JSON must be an object.");
   }
-  const record = value as Record<string, unknown>;
-  if ("version" in record || "defaults" in record || "agents" in record) {
+  if ("version" in value || "defaults" in value || "agents" in value) {
     exitWithError(
       "Host-native node approvals require JSON with defaultAction and rules, not exec-approvals.json file syntax.",
     );
   }
-  const defaultAction = normalizeOptionalString(record.defaultAction) ?? undefined;
-  const rulesRaw = record.rules;
+  const defaultAction = normalizeOptionalString(value["defaultAction"]) ?? undefined;
+  const rulesRaw = value["rules"];
   if (rulesRaw !== undefined && !Array.isArray(rulesRaw)) {
     exitWithError("Host-native exec approvals rules must be an array.");
   }
@@ -144,13 +146,15 @@ function normalizeNativeExecApprovalPolicyInput(value: unknown): NativeExecAppro
         if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
           exitWithError("Host-native exec approval rules must be objects.");
         }
-        const rule = entry as Record<string, unknown>;
-        const pattern = normalizeOptionalString(rule.pattern);
-        const action = normalizeOptionalString(rule.action);
+        if (!isRecord(entry)) {
+          exitWithError("Host-native exec approval rules must be objects.");
+        }
+        const pattern = normalizeOptionalString(entry["pattern"]);
+        const action = normalizeOptionalString(entry["action"]);
         if (!pattern || !action) {
           exitWithError("Host-native exec approval rules require pattern and action.");
         }
-        const shellsRaw = rule.shells;
+        const shellsRaw = entry["shells"];
         if (shellsRaw !== undefined && !Array.isArray(shellsRaw)) {
           exitWithError("Host-native exec approval rule shells must be an array.");
         }
@@ -164,25 +168,33 @@ function normalizeNativeExecApprovalPolicyInput(value: unknown): NativeExecAppro
         if (shells && shells.length > 0) {
           nextRule.shells = shells;
         }
-        if (typeof rule.description === "string") {
-          nextRule.description = rule.description;
+        if (typeof entry["description"] === "string") {
+          nextRule.description = entry["description"];
         }
-        if (typeof rule.enabled === "boolean") {
-          nextRule.enabled = rule.enabled;
+        if (typeof entry["enabled"] === "boolean") {
+          nextRule.enabled = entry["enabled"];
         }
         return nextRule;
       })
     : undefined;
   const hasRulesField = Array.isArray(rulesRaw);
-  const hasNonEmptyRules = !!rules && rules.length > 0;
+  const hasNonEmptyRules = Boolean(rules && rules.length > 0);
   if (!defaultAction && !hasNonEmptyRules) {
     exitWithError("Host-native exec approvals JSON must include defaultAction or rules.");
   }
   return {
-    ...(typeof record.enabled === "boolean" ? { enabled: record.enabled } : {}),
+    ...(typeof value["enabled"] === "boolean" ? { enabled: value["enabled"] } : {}),
     ...(defaultAction ? { defaultAction } : {}),
     ...(hasRulesField ? { rules: rules ?? [] } : {}),
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isString(value: string | null): value is string {
+  return value !== null;
 }
 
 function saveSnapshotLocal(file: ExecApprovalsFile): ExecApprovalsSnapshot {
@@ -417,7 +429,7 @@ function renderApprovalsSnapshot(snapshot: ExecApprovalsSnapshot, targetLabel: s
     typeof defaults.autoAllowSkills === "boolean"
       ? `autoAllowSkills=${defaults.autoAllowSkills ? "on" : "off"}`
       : null,
-  ].filter(Boolean) as string[];
+  ].filter(isString);
   const agents = file.agents ?? {};
   const allowlistRows: Array<{ Target: string; Agent: string; Pattern: string; LastUsed: string }> =
     [];
@@ -753,7 +765,7 @@ export function registerExecApprovalsCli(program: Command) {
           await saveSnapshotTargeted({ opts, source, nodeId, native, baseHash, targetLabel });
           return;
         }
-        const file = parsed as ExecApprovalsFile;
+        const file = normalizeExecApprovals(parsed);
         file.version = 1;
         await saveSnapshotTargeted({ opts, source, nodeId, file, baseHash, targetLabel });
       } catch (err) {

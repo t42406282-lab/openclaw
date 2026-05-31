@@ -189,14 +189,19 @@ function isReleasedVersion(version: string): boolean {
  * Process-stable: only changes on `openclaw node install`, which requires restart.
  */
 let cachedLocalNodeId: string | null | undefined;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function resolveLocalNodeId(): string | null {
   if (cachedLocalNodeId !== undefined) {
     return cachedLocalNodeId;
   }
   try {
     const raw = fs.readFileSync(path.join(resolveStateDir(), "node.json"), "utf8");
-    const parsed = JSON.parse(raw) as { nodeId?: string };
-    cachedLocalNodeId = typeof parsed.nodeId === "string" ? parsed.nodeId.trim() || null : null;
+    const parsed: unknown = JSON.parse(raw);
+    const nodeId = isRecord(parsed) ? parsed["nodeId"] : undefined;
+    cachedLocalNodeId = typeof nodeId === "string" ? nodeId.trim() || null : null;
   } catch {
     cachedLocalNodeId = null;
   }
@@ -511,25 +516,13 @@ export function attachGatewayWsMessageHandler(params: GatewayWsMessageHandlerPar
 
     const text = rawDataToString(data);
     try {
-      const parsed = JSON.parse(text);
+      const parsed: unknown = JSON.parse(text);
+      const parsedRecord = isRecord(parsed) ? parsed : undefined;
       const frameType =
-        parsed && typeof parsed === "object" && "type" in parsed
-          ? typeof (parsed as { type?: unknown }).type === "string"
-            ? String((parsed as { type?: unknown }).type)
-            : undefined
-          : undefined;
+        typeof parsedRecord?.["type"] === "string" ? parsedRecord["type"] : undefined;
       const frameMethod =
-        parsed && typeof parsed === "object" && "method" in parsed
-          ? typeof (parsed as { method?: unknown }).method === "string"
-            ? String((parsed as { method?: unknown }).method)
-            : undefined
-          : undefined;
-      const frameId =
-        parsed && typeof parsed === "object" && "id" in parsed
-          ? typeof (parsed as { id?: unknown }).id === "string"
-            ? String((parsed as { id?: unknown }).id)
-            : undefined
-          : undefined;
+        typeof parsedRecord?.["method"] === "string" ? parsedRecord["method"] : undefined;
+      const frameId = typeof parsedRecord?.["id"] === "string" ? parsedRecord["id"] : undefined;
       if (frameType || frameMethod || frameId) {
         setLastFrameMeta({ type: frameType, method: frameMethod, id: frameId });
       }
@@ -579,7 +572,7 @@ export function attachGatewayWsMessageHandler(params: GatewayWsMessageHandlerPar
         }
 
         const frame = parsed;
-        const connectParams = frame.params as ConnectParams;
+        const connectParams = frame.params;
         const resolvedAuth = getResolvedAuth();
         const clientLabel = connectParams.client.displayName ?? connectParams.client.id;
         const clientMeta = {
@@ -1630,15 +1623,12 @@ export function attachGatewayWsMessageHandler(params: GatewayWsMessageHandlerPar
               dropIfSlow: true,
             });
           }
-          const nodeConnectParams = connectParams as ConnectParams & {
-            declaredCaps?: string[];
-            declaredCommands?: string[];
-            declaredPermissions?: Record<string, boolean>;
-          };
           reconciledNodeId = reconciliation.nodeId;
-          nodeConnectParams.declaredCaps = reconciliation.declaredCaps;
-          nodeConnectParams.declaredCommands = reconciliation.declaredCommands;
-          nodeConnectParams.declaredPermissions = reconciliation.declaredPermissions;
+          Object.assign(connectParams, {
+            declaredCaps: reconciliation.declaredCaps,
+            declaredCommands: reconciliation.declaredCommands,
+            declaredPermissions: reconciliation.declaredPermissions,
+          });
           connectParams.caps = reconciliation.effectiveCaps;
           connectParams.commands = reconciliation.effectiveCommands;
           connectParams.permissions = reconciliation.effectivePermissions;
@@ -1964,7 +1954,7 @@ export function attachGatewayWsMessageHandler(params: GatewayWsMessageHandlerPar
       if (!validateRequestFrame(parsed)) {
         send({
           type: "res",
-          id: (parsed as { id?: unknown })?.id ?? "invalid",
+          id: isRecord(parsed) ? (parsed["id"] ?? "invalid") : "invalid",
           ok: false,
           error: errorShape(
             ErrorCodes.INVALID_REQUEST,
@@ -2100,8 +2090,8 @@ function getRawDataByteLength(data: unknown): number {
 }
 
 function setSocketMaxPayload(socket: WebSocket, maxPayload: number): void {
-  const receiver = (socket as { _receiver?: { _maxPayload?: number } })["_receiver"];
-  if (receiver) {
+  const receiver = Reflect.get(socket, "_receiver");
+  if (isRecord(receiver)) {
     receiver["_maxPayload"] = maxPayload;
   }
 }

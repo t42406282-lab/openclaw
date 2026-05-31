@@ -1,3 +1,4 @@
+// oxlint-disable typescript/no-unsafe-type-assertion -- Tests inspect node catalog fixtures whose runtime shapes are part of the assertions.
 import { describe, expect, it } from "vitest";
 import {
   createKnownNodeCatalog,

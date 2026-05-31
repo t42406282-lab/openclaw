@@ -1,3 +1,4 @@
+// oxlint-disable typescript/no-unsafe-type-assertion -- Tests inspect mocked node registry payloads whose runtime shapes are part of the assertions.
 import { EventEmitter } from "node:events";
 import {
   MAX_DATE_TIMESTAMP_MS,
