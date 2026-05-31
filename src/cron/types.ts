@@ -155,6 +155,7 @@ export type CronRunDiagnostics = {
   entries: CronRunDiagnostic[];
 };
 
+/** Execution result persisted on cron state, run logs, and isolated turn results. */
 export type CronRunOutcome = {
   status: CronRunStatus;
   error?: string;
@@ -166,6 +167,7 @@ export type CronRunOutcome = {
   diagnostics?: CronRunDiagnostics;
 };
 
+/** Embedded-agent execution phase names surfaced to cron watchdog progress. */
 export type CronAgentExecutionPhase = EmbeddedAgentExecutionPhase;
 
 /** Watchdog-visible execution metadata for an in-flight cron agent run. */
