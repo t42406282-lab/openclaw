@@ -40,6 +40,8 @@ function resolveGatewayProbeCredentialConfig(params: {
     return params.cfg;
   }
 
+  // Local probes should use local auth sources only; remote credentials are
+  // valid for remote mode but can mask a missing local Gateway token/password.
   const remoteWithoutAuth = { ...remote };
   delete remoteWithoutAuth.token;
   delete remoteWithoutAuth.password;
