@@ -687,13 +687,21 @@ async function closeChildAcpRuntimesForParent(params: {
 }
 
 export async function cleanupSessionBeforeMutation(params: {
+  /** Config snapshot used to resolve runtime/plugin cleanup ownership. */
   cfg: OpenClawConfig;
+  /** Caller-provided session key before canonical migration. */
   key: string;
+  /** Canonical store target selected for the mutation. */
   target: ReturnType<typeof resolveGatewaySessionStoreTarget>;
+  /** Current persisted entry, if the session exists before mutation. */
   entry: SessionEntry | undefined;
+  /** Legacy store key kept for ACP/runtime fallback lookup during migration. */
   legacyKey?: string;
+  /** Canonical store key found before mutation, when it differs from target. */
   canonicalKey?: string;
+  /** Lifecycle mutation being prepared. */
   reason: "session-reset" | "session-delete";
+  /** Captures ACP metadata that must be reattached after reset rotates sessionId. */
   onAcpResetMeta?: (params: { sessionKey: string; meta: SessionAcpMeta }) => void;
 }) {
   const cleanupError = await ensureSessionRuntimeCleanup({
@@ -724,6 +732,8 @@ export async function cleanupSessionBeforeMutation(params: {
     reason: params.reason,
     onResetMeta: params.onAcpResetMeta,
   });
+  // Parent cleanup owns the returned error because it blocks mutation; child
+  // cleanup is best-effort so a stuck spawned session cannot prevent reset/delete.
   await closeChildAcpRuntimesForParent({
     cfg: params.cfg,
     parentKey: params.target.canonicalKey ?? params.canonicalKey ?? params.key,
