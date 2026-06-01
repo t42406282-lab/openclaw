@@ -153,6 +153,9 @@ function appendTranscriptText(base: string | undefined, fragment: string): strin
     return next;
   }
   const overlap = findTextOverlap(currentLower, nextLower);
+  // Realtime providers often emit growing partials plus tiny trailing fragments.
+  // Merge only clear overlap so consult prompts keep the caller's words without
+  // duplicating syllables when the provider revises a partial transcript.
   if (overlap >= 6 || (overlap >= 3 && next.length <= 12)) {
     return `${current}${next.slice(overlap)}`.trim();
   }
@@ -511,6 +514,8 @@ export class RealtimeCallHandler {
     if (expiry !== undefined) {
       this.pendingStreamTokens.set(token, { expiry, ...meta });
     }
+    // Token issuance is also the cleanup point; media stream tokens are
+    // short-lived one-shot capabilities, not a growing session registry.
     for (const [candidate, entry] of this.pendingStreamTokens) {
       if (!isFutureDateTimestampMs(entry.expiry, { nowMs: now })) {
         this.pendingStreamTokens.delete(candidate);
@@ -525,6 +530,8 @@ export class RealtimeCallHandler {
       return null;
     }
     this.pendingStreamTokens.delete(token);
+    // Consume before expiry validation so replayed or stale stream URLs cannot
+    // be retried after a failed upgrade attempt.
     if (!isFutureDateTimestampMs(entry.expiry)) {
       return null;
     }
@@ -926,6 +933,9 @@ export class RealtimeCallHandler {
   private setRecentFinalUserTranscript(callId: string, text: string): void {
     this.clearRecentFinalUserTranscript(callId);
     this.recentFinalUserTranscriptsByCallId.set(callId, text);
+    // Keep final transcript context only long enough for the provider's tool
+    // call to arrive after response finalization; otherwise old caller intent
+    // can leak into a later turn's consult.
     const timer = setTimeout(() => {
       if (this.recentFinalUserTranscriptsByCallId.get(callId) === text) {
         this.recentFinalUserTranscriptsByCallId.delete(callId);
@@ -999,6 +1009,9 @@ export class RealtimeCallHandler {
       if (quietFor >= CONSULT_TRANSCRIPT_SETTLE_MS || now >= deadline) {
         return;
       }
+      // Wait for partial transcript churn to go quiet before building consult
+      // args; the max deadline bounds tool latency when a provider keeps
+      // streaming tiny deltas.
       await new Promise((resolve) => {
         setTimeout(resolve, Math.min(CONSULT_TRANSCRIPT_SETTLE_MS - quietFor, deadline - now));
       });
@@ -1061,6 +1074,9 @@ export class RealtimeCallHandler {
       return;
     }
     coordinator.clearPending();
+    // Give the realtime provider a short chance to call the native consult tool
+    // first; the forced path exists only when the provider finalizes speech
+    // without asking OpenClaw for an agent consult.
     const pending = coordinator.prepare(question);
     if (!pending) {
       return;
@@ -1298,6 +1314,8 @@ export class RealtimeCallHandler {
           });
           return;
         }
+        // A native provider tool call takes over speech delivery from the
+        // forced fallback, but shares the same in-flight agent consult result.
         forcedConsult.sendSpeechPrompt = false;
         const result = await forcedConsult.promise.catch((error: unknown) => ({
           error: formatErrorMessage(error),
@@ -1321,6 +1339,8 @@ export class RealtimeCallHandler {
         startedAt,
         promise: Promise.resolve(),
       };
+      // Share same-turn native consults so duplicate provider tool calls do not
+      // fan out multiple agent runs for the same caller utterance.
       state.promise = (async () => {
         await this.waitForConsultTranscriptSettle(callId, startedAt);
         const context = {
