@@ -22,6 +22,8 @@ import {
 import { authorizeOperatorScopesForMethod } from "./method-scopes.js";
 import { loadSessionEntry } from "./session-utils.js";
 
+// Remote callers can only kill a child run by proving the parent/requester
+// session that controls it; local direct requests use admin scope instead.
 const REQUESTER_SESSION_KEY_HEADER = "x-openclaw-requester-session-key";
 
 type SessionKeyPathResolution =
@@ -106,8 +108,9 @@ export async function handleSessionKillHttpRequest(
     return true;
   }
 
-  // Remote requester kills only need abort/write authority and ownership proof;
-  // local admin kills require delete/admin authority and bypass ownership checks.
+  // Remote requester kills only need abort/write authority because
+  // subagent-control enforces ownership; local admin kills require delete/admin
+  // authority and intentionally bypass requester ownership checks.
   const requiredOperatorMethod =
     requesterSessionKey && !allowLocalAdminKill ? "sessions.abort" : "sessions.delete";
   const scopeAuth = authorizeOperatorScopesForMethod(requiredOperatorMethod, requestedScopes);
