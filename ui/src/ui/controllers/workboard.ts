@@ -1454,8 +1454,9 @@ function latestStatusTransitionAt(card: WorkboardCard): number | undefined {
   for (let index = (card.events?.length ?? 0) - 1; index >= 0; index -= 1) {
     const event = card.events?.[index];
     if (
-      event?.kind === "moved" &&
-      event.fromStatus !== event.toStatus &&
+      (event?.kind === "moved" || event?.kind === "created") &&
+      ((event.kind === "created" && card.status !== "todo") ||
+        (event.kind === "moved" && event.fromStatus !== event.toStatus)) &&
       event.toStatus === card.status &&
       typeof event.at === "number" &&
       Number.isFinite(event.at)

@@ -392,6 +392,35 @@ describe("WorkboardStore", () => {
     );
   });
 
+  it("keeps creation status from stale lifecycle patches", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(2000);
+      const store = new WorkboardStore(createMemoryStore());
+      const card = await store.create({
+        title: "Initial running status",
+        status: "running",
+      });
+
+      const staleLifecycle = await store.update(card.id, {
+        status: "review",
+        metadata: { lifecycleStatusSourceUpdatedAt: 1000 },
+      });
+      expect(staleLifecycle).toEqual(card);
+      expect(staleLifecycle.status).toBe("running");
+      expect(staleLifecycle.metadata?.lifecycleStatusSourceUpdatedAt).toBeUndefined();
+
+      const freshLifecycle = await store.update(card.id, {
+        status: "review",
+        metadata: { lifecycleStatusSourceUpdatedAt: 3000 },
+      });
+      expect(freshLifecycle.status).toBe("review");
+      expect(freshLifecycle.metadata?.lifecycleStatusSourceUpdatedAt).toBe(3000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps non-status fields from stale lifecycle patches", async () => {
     const store = new WorkboardStore(createMemoryStore());
     const card = await store.create({
