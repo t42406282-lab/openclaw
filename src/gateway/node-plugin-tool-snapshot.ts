@@ -12,6 +12,11 @@ export type ConnectedNodePluginTool = {
 
 const toolsByNodeId = new Map<string, ConnectedNodePluginTool[]>();
 const NODE_PLUGIN_TOOL_NAME_RE = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
+let snapshotVersion = 0;
+
+function bumpSnapshotVersion(): void {
+  snapshotVersion += 1;
+}
 
 function normalizeString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -93,7 +98,10 @@ export function replaceConnectedNodePluginTools(params: {
   tools: readonly NodePluginToolDescriptor[];
 }): void {
   if (params.tools.length === 0) {
-    toolsByNodeId.delete(params.nodeId);
+    const removed = toolsByNodeId.delete(params.nodeId);
+    if (removed) {
+      bumpSnapshotVersion();
+    }
     return;
   }
   toolsByNodeId.set(
@@ -106,10 +114,14 @@ export function replaceConnectedNodePluginTools(params: {
       descriptor,
     })),
   );
+  bumpSnapshotVersion();
 }
 
 export function removeConnectedNodePluginTools(nodeId: string): void {
-  toolsByNodeId.delete(nodeId);
+  const removed = toolsByNodeId.delete(nodeId);
+  if (removed) {
+    bumpSnapshotVersion();
+  }
 }
 
 export function listConnectedNodePluginTools(): ConnectedNodePluginTool[] {
@@ -123,6 +135,11 @@ export function listConnectedNodePluginTools(): ConnectedNodePluginTool[] {
     );
 }
 
+export function getConnectedNodePluginToolsVersion(): number {
+  return snapshotVersion;
+}
+
 export function resetConnectedNodePluginToolsForTest(): void {
   toolsByNodeId.clear();
+  bumpSnapshotVersion();
 }

@@ -85,6 +85,7 @@ function registerDemoNodePluginTool(params: {
   command: string;
   description?: string;
   parameters?: Record<string, unknown>;
+  dangerous?: boolean;
 }) {
   const registry = createEmptyPluginRegistry();
   registry.nodeHostCommands ??= [];
@@ -95,6 +96,7 @@ function registerDemoNodePluginTool(params: {
     rootDir: "test",
     command: {
       command: params.command,
+      ...(params.dangerous ? { dangerous: true } : {}),
       agentTool: {
         name: params.name,
         description: params.description ?? "Demo node-host tool",
@@ -674,6 +676,33 @@ describe("gateway/node-registry", () => {
 
     expect(registry.get("node-1")?.nodePluginTools).toEqual([]);
     expect(listConnectedNodePluginTools()).toEqual([]);
+  });
+
+  it("keeps dangerous node-hosted plugin tools once explicitly approved", () => {
+    registerDemoNodePluginTool({
+      name: "demo_dangerous",
+      command: "demo.dangerous",
+      dangerous: true,
+    });
+    const registry = new NodeRegistry();
+    const client = makeClient("conn-1", "node-1", [], {
+      commands: ["demo.dangerous"],
+      nodePluginTools: [
+        {
+          pluginId: "demo",
+          name: "demo_dangerous",
+          description: "Dangerous command",
+          command: "demo.dangerous",
+        },
+      ],
+    });
+
+    const session = registry.register(client, {});
+
+    expect(session.nodePluginTools.map((tool) => tool.name)).toEqual(["demo_dangerous"]);
+    expect(listConnectedNodePluginTools().map((entry) => entry.descriptor.name)).toEqual([
+      "demo_dangerous",
+    ]);
   });
 
   it("drops node-hosted plugin tools with provider-unsafe names", () => {

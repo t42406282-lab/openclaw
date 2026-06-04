@@ -949,7 +949,6 @@ describe("GatewayClient connect auth payload", () => {
       minProtocol?: number;
       maxProtocol?: number;
       scopes?: string[];
-      nodePluginTools?: unknown[];
       auth?: {
         token?: string;
         bootstrapToken?: string;
@@ -997,19 +996,11 @@ describe("GatewayClient connect auth payload", () => {
     const client = new GatewayClient({
       url: "ws://127.0.0.1:18789",
       deviceIdentity: null,
-      nodePluginTools: [
-        {
-          pluginId: "demo",
-          name: "demo_echo",
-          description: "Echo through the node",
-          command: "demo.echo",
-        },
-      ],
     });
 
     const { connect } = startClientAndConnect({ client });
 
-    expect(connect.params?.nodePluginTools).toBeUndefined();
+    expect(connect.params).not.toHaveProperty("nodePluginTools");
     client.stop();
   });
 

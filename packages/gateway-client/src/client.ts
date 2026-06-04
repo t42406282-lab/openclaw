@@ -3,7 +3,6 @@ import type {
   ConnectParams,
   EventFrame,
   HelloOk,
-  NodePluginToolDescriptor,
   RequestFrame,
   ResponseFrame,
 } from "@openclaw/gateway-protocol";
@@ -427,7 +426,6 @@ export type GatewayClientOptions = {
   scopes?: string[];
   caps?: string[];
   commands?: string[];
-  nodePluginTools?: NodePluginToolDescriptor[];
   permissions?: Record<string, boolean>;
   pathEnv?: string;
   env?: NodeJS.ProcessEnv;

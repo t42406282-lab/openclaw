@@ -177,6 +177,23 @@ describe("gateway/node-command-policy", () => {
     ).toEqual(["remote.echo"]);
   });
 
+  it("does not allow connected node plugin tools without a registry default or config allowlist", () => {
+    const allowlist = resolveNodeCommandAllowlist({} as OpenClawConfig, {
+      platform: "macos",
+      deviceFamily: "Mac",
+      commands: ["remote.echo"],
+    });
+
+    expect(allowlist.has("remote.echo")).toBe(false);
+    expect(
+      isNodeCommandAllowed({
+        command: "remote.echo",
+        declaredCommands: ["remote.echo"],
+        allowlist,
+      }),
+    ).toEqual({ ok: false, reason: "command not allowlisted" });
+  });
+
   it("does not grant host command defaults for platform prefix aliases", () => {
     const cfg = {} as OpenClawConfig;
     const cases = [
