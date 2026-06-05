@@ -231,6 +231,32 @@ describe("Bedrock tool config snapshots", () => {
     ).toThrow('Bedrock toolChoice requires unavailable tool "loop"');
   });
 
+  it("fails closed when a forced tool choice name is unreadable", () => {
+    const unreadableToolChoice = { type: "tool" };
+    Object.defineProperty(unreadableToolChoice, "name", {
+      enumerable: true,
+      get() {
+        throw new Error("raw forced name getter");
+      },
+    });
+
+    expect(() =>
+      testing.convertToolConfig(
+        [
+          {
+            name: "lookup",
+            description: "Lookup",
+            parameters: {
+              type: "object",
+              properties: {},
+            },
+          },
+        ] as never,
+        unreadableToolChoice as never,
+      ),
+    ).toThrow("Bedrock forced toolChoice name is unreadable");
+  });
+
   it("fails closed when any-choice has no surviving tools", () => {
     const cyclicSchema: Record<string, unknown> = { type: "object" };
     cyclicSchema.self = cyclicSchema;

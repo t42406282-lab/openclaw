@@ -822,16 +822,18 @@ function convertToolConfig(
 function resolveBedrockForcedToolChoiceName(
   toolChoice: BedrockOptions["toolChoice"],
 ): string | undefined {
-  try {
-    return typeof toolChoice === "object" &&
-      toolChoice?.type === "tool" &&
-      typeof toolChoice.name === "string" &&
-      toolChoice.name.length > 0
-      ? toolChoice.name
-      : undefined;
-  } catch {
+  if (!toolChoice || typeof toolChoice !== "object") {
     return undefined;
   }
+  let type: unknown;
+  let name: unknown;
+  try {
+    type = toolChoice.type;
+    name = toolChoice.name;
+  } catch {
+    throw new Error("Bedrock forced toolChoice name is unreadable");
+  }
+  return type === "tool" && typeof name === "string" && name.length > 0 ? name : undefined;
 }
 
 function snapshotBedrockTool(tool: Tool): BedrockTool | undefined {
