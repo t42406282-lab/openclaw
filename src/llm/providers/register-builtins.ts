@@ -129,16 +129,37 @@ function forwardStream(
   })();
 }
 
+function readLazyLoadModelString<TApi extends Api>(
+  model: Model<TApi>,
+  key: "provider" | "id",
+): string {
+  try {
+    const value = model[key];
+    return typeof value === "string" && value.length > 0 ? value : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+function formatLazyLoadErrorMessage(error: unknown): string {
+  try {
+    return error instanceof Error ? error.message : String(error);
+  } catch {
+    return "Unknown lazy provider load error";
+  }
+}
+
 function createLazyLoadErrorMessage<TApi extends Api>(
+  api: TApi,
   model: Model<TApi>,
   error: unknown,
 ): AssistantMessage {
   return {
     role: "assistant",
     content: [],
-    api: model.api,
-    provider: model.provider,
-    model: model.id,
+    api,
+    provider: readLazyLoadModelString(model, "provider"),
+    model: readLazyLoadModelString(model, "id"),
     usage: {
       input: 0,
       output: 0,
@@ -148,7 +169,7 @@ function createLazyLoadErrorMessage<TApi extends Api>(
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "error",
-    errorMessage: error instanceof Error ? error.message : String(error),
+    errorMessage: formatLazyLoadErrorMessage(error),
     timestamp: Date.now(),
   };
 }
@@ -159,6 +180,7 @@ function createLazyStream<
   TOptions extends StreamOptions,
   TSimpleOptions extends SimpleStreamOptions,
 >(
+  api: TApi,
   loadModule: () => Promise<LazyProviderModule<TApi, TOptions, TSimpleOptions>>,
 ): StreamFunction<TApi, TOptions> {
   return (model, context, options) => {
@@ -171,7 +193,7 @@ function createLazyStream<
       })
       .catch((error: unknown) => {
         // Surface lazy-load failures as normal assistant error messages for stream consumers.
-        const message = createLazyLoadErrorMessage(model, error);
+        const message = createLazyLoadErrorMessage(api, model, error);
         outer.push({ type: "error", reason: "error", error: message });
         outer.end(message);
       });
@@ -185,6 +207,7 @@ function createLazySimpleStream<
   TOptions extends StreamOptions,
   TSimpleOptions extends SimpleStreamOptions,
 >(
+  api: TApi,
   loadModule: () => Promise<LazyProviderModule<TApi, TOptions, TSimpleOptions>>,
 ): StreamFunction<TApi, TSimpleOptions> {
   return (model, context, options) => {
@@ -196,7 +219,7 @@ function createLazySimpleStream<
         forwardStream(outer, inner);
       })
       .catch((error: unknown) => {
-        const message = createLazyLoadErrorMessage(model, error);
+        const message = createLazyLoadErrorMessage(api, model, error);
         outer.push({ type: "error", reason: "error", error: message });
         outer.end(message);
       });
@@ -313,28 +336,56 @@ function loadOpenAIResponsesProviderModule(): Promise<
   return openAIResponsesProviderModulePromise;
 }
 
-export const streamAnthropic = createLazyStream(loadAnthropicProviderModule);
-export const streamSimpleAnthropic = createLazySimpleStream(loadAnthropicProviderModule);
-export const streamAzureOpenAIResponses = createLazyStream(loadAzureOpenAIResponsesProviderModule);
-export const streamSimpleAzureOpenAIResponses = createLazySimpleStream(
+export const streamAnthropic = createLazyStream("anthropic-messages", loadAnthropicProviderModule);
+export const streamSimpleAnthropic = createLazySimpleStream(
+  "anthropic-messages",
+  loadAnthropicProviderModule,
+);
+export const streamAzureOpenAIResponses = createLazyStream(
+  "azure-openai-responses",
   loadAzureOpenAIResponsesProviderModule,
 );
-export const streamGoogle = createLazyStream(loadGoogleProviderModule);
-export const streamSimpleGoogle = createLazySimpleStream(loadGoogleProviderModule);
-export const streamGoogleVertex = createLazyStream(loadGoogleVertexProviderModule);
-export const streamSimpleGoogleVertex = createLazySimpleStream(loadGoogleVertexProviderModule);
-export const streamMistral = createLazyStream(loadMistralProviderModule);
-export const streamSimpleMistral = createLazySimpleStream(loadMistralProviderModule);
-export const streamOpenAICodexResponses = createLazyStream(loadOpenAICodexResponsesProviderModule);
-export const streamSimpleOpenAICodexResponses = createLazySimpleStream(
+export const streamSimpleAzureOpenAIResponses = createLazySimpleStream(
+  "azure-openai-responses",
+  loadAzureOpenAIResponsesProviderModule,
+);
+export const streamGoogle = createLazyStream("google-generative-ai", loadGoogleProviderModule);
+export const streamSimpleGoogle = createLazySimpleStream(
+  "google-generative-ai",
+  loadGoogleProviderModule,
+);
+export const streamGoogleVertex = createLazyStream("google-vertex", loadGoogleVertexProviderModule);
+export const streamSimpleGoogleVertex = createLazySimpleStream(
+  "google-vertex",
+  loadGoogleVertexProviderModule,
+);
+export const streamMistral = createLazyStream("mistral-conversations", loadMistralProviderModule);
+export const streamSimpleMistral = createLazySimpleStream(
+  "mistral-conversations",
+  loadMistralProviderModule,
+);
+export const streamOpenAICodexResponses = createLazyStream(
+  "openai-chatgpt-responses",
   loadOpenAICodexResponsesProviderModule,
 );
-export const streamOpenAICompletions = createLazyStream(loadOpenAICompletionsProviderModule);
-export const streamSimpleOpenAICompletions = createLazySimpleStream(
+export const streamSimpleOpenAICodexResponses = createLazySimpleStream(
+  "openai-chatgpt-responses",
+  loadOpenAICodexResponsesProviderModule,
+);
+export const streamOpenAICompletions = createLazyStream(
+  "openai-completions",
   loadOpenAICompletionsProviderModule,
 );
-export const streamOpenAIResponses = createLazyStream(loadOpenAIResponsesProviderModule);
+export const streamSimpleOpenAICompletions = createLazySimpleStream(
+  "openai-completions",
+  loadOpenAICompletionsProviderModule,
+);
+export const streamOpenAIResponses = createLazyStream(
+  "openai-responses",
+  loadOpenAIResponsesProviderModule,
+);
 export const streamSimpleOpenAIResponses = createLazySimpleStream(
+  "openai-responses",
   loadOpenAIResponsesProviderModule,
 );
 
