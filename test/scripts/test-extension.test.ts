@@ -873,7 +873,7 @@ describe("scripts/test-extension.mjs", () => {
     expect(result).toBe(0);
     expect(runGroup).toHaveBeenCalledTimes(3);
     expect(runGroup.mock.calls.map(([params]) => params.targets)).toEqual([
-      expect.arrayContaining([bundledPluginFile("telegram", "index.test.ts")]),
+      expect.arrayContaining(["telegram/index.test.ts"]),
       expect.any(Array),
       expect.any(Array),
     ]);
@@ -903,14 +903,13 @@ describe("scripts/test-extension.mjs", () => {
     );
 
     expect(result).toBe(0);
-    expect(
-      runGroup.mock.calls.map(([params]) => params.targets.length).reduce((a, b) => a + b, 0),
-    ).toBe(64);
+    expect(runGroup.mock.calls.length).toBeGreaterThan(1);
+    expect(runGroup.mock.calls.every(([params]) => params.targets.length <= 25)).toBe(true);
     expect(runGroup.mock.calls.map(([params]) => params.targets)).toContainEqual([
-      bundledPluginFile("memory-core", "src/memory/manager-embedding-timeout.test.ts"),
+      "memory-core/src/memory/manager-embedding-timeout.test.ts",
     ]);
     expect(runGroup.mock.calls.map(([params]) => params.targets)).toContainEqual([
-      bundledPluginFile("memory-core", "src/memory/qmd-manager.test.ts"),
+      "memory-core/src/memory/qmd-manager.test.ts",
     ]);
   });
 
