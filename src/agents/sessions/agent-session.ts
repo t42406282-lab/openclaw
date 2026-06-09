@@ -478,25 +478,28 @@ export class AgentSession {
   private installAgentToolHooks(): void {
     this.agent.beforeToolCall = async ({ toolCall, args }) => {
       const runner = this.currentExtensionRunner;
-      return await this.runWithSessionWriteLock(async () => {
-        if (!runner.hasHandlers("tool_call")) {
-          return undefined;
-        }
-
-        try {
-          return await runner.emitToolCall({
-            type: "tool_call",
-            toolName: toolCall.name,
-            toolCallId: toolCall.id,
-            input: args as Record<string, unknown>,
-          });
-        } catch (err) {
-          if (err instanceof Error) {
-            throw err;
+      return await this.runWithSessionWriteLock(
+        async () => {
+          if (!runner.hasHandlers("tool_call")) {
+            return undefined;
           }
-          throw new Error(`Extension failed, blocking execution: ${String(err)}`, { cause: err });
-        }
-      });
+
+          try {
+            return await runner.emitToolCall({
+              type: "tool_call",
+              toolName: toolCall.name,
+              toolCallId: toolCall.id,
+              input: args as Record<string, unknown>,
+            });
+          } catch (err) {
+            if (err instanceof Error) {
+              throw err;
+            }
+            throw new Error(`Extension failed, blocking execution: ${String(err)}`, { cause: err });
+          }
+        },
+        { publishOwnedWrite: true },
+      );
     };
 
     this.agent.afterToolCall = async ({ toolCall, args, result, isError }) => {
@@ -516,6 +519,7 @@ export class AgentSession {
             details: result.details,
             isError,
           }),
+        { publishOwnedWrite: true },
       );
 
       if (!hookResult) {
@@ -1948,7 +1952,7 @@ export class AgentSession {
       return { status: "aborted" };
     }
 
-    const appendCompaction = () =>
+    const persistCompaction = async () => {
       this.sessionManager.appendCompaction(
         compactionResult.summary,
         compactionResult.firstKeptEntryId,
@@ -1956,25 +1960,26 @@ export class AgentSession {
         compactionResult.details,
         fromExtension,
       );
+      const newEntries = this.sessionManager.getEntries();
+      const sessionContext = this.sessionManager.buildSessionContext();
+      this.agent.state.messages = sessionContext.messages;
+
+      const savedCompactionEntry = newEntries.find(
+        (e) => e.type === "compaction" && e.summary === compactionResult.summary,
+      ) as CompactionEntry | undefined;
+
+      if (this.currentExtensionRunner && savedCompactionEntry) {
+        await this.currentExtensionRunner.emit({
+          type: "session_compact",
+          compactionEntry: savedCompactionEntry,
+          fromExtension,
+        });
+      }
+    };
     if (options.sessionWriteLockHeld) {
-      appendCompaction();
+      await persistCompaction();
     } else {
-      await this.runWithSessionWriteLock(appendCompaction, { publishOwnedWrite: true });
-    }
-    const newEntries = this.sessionManager.getEntries();
-    const sessionContext = this.sessionManager.buildSessionContext();
-    this.agent.state.messages = sessionContext.messages;
-
-    const savedCompactionEntry = newEntries.find(
-      (e) => e.type === "compaction" && e.summary === compactionResult.summary,
-    ) as CompactionEntry | undefined;
-
-    if (this.currentExtensionRunner && savedCompactionEntry) {
-      await this.currentExtensionRunner.emit({
-        type: "session_compact",
-        compactionEntry: savedCompactionEntry,
-        fromExtension,
-      });
+      await this.runWithSessionWriteLock(persistCompaction, { publishOwnedWrite: true });
     }
 
     return { status: "compacted", result: compactionResult };

@@ -340,8 +340,13 @@ export async function createAgentSession(
   };
 
   const extensionRunnerRef: { current?: ExtensionRunner } = {};
-  const runWithSessionWriteLock = async <T>(run: () => Promise<T> | T): Promise<T> =>
-    options.withSessionWriteLock ? await options.withSessionWriteLock(run) : await run();
+  const runWithSessionWriteLock = async <T>(
+    run: () => Promise<T> | T,
+    lockOptions?: { publishOwnedWrite?: boolean },
+  ): Promise<T> =>
+    options.withSessionWriteLock
+      ? await options.withSessionWriteLock(run, lockOptions)
+      : await run();
 
   const agent: Agent = new Agent({
     initialState: {
@@ -378,6 +383,7 @@ export async function createAgentSession(
       }
       return await runWithSessionWriteLock(
         async () => await runner.emitBeforeProviderRequest(payload),
+        { publishOwnedWrite: true },
       );
     },
     onResponse: async (response, modelLocal) => {
@@ -393,6 +399,7 @@ export async function createAgentSession(
             status: response.status,
             headers: response.headers,
           }),
+        { publishOwnedWrite: true },
       );
     },
     sessionId: sessionManager.getSessionId(),

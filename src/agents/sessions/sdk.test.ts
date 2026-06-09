@@ -327,6 +327,7 @@ describe("createAgentSession tool defaults", () => {
 
   it("runs write-capable tool hooks under the configured write lock", async () => {
     const events: string[] = [];
+    const lockOptions: Array<{ publishOwnedWrite?: boolean } | undefined> = [];
     const handlers = new Map<string, Array<(...args: unknown[]) => Promise<unknown>>>([
       [
         "tool_call",
@@ -345,7 +346,8 @@ describe("createAgentSession tool defaults", () => {
       sessionManager: SessionManager.inMemory(),
       settingsManager: SettingsManager.inMemory(),
       modelRegistry: ModelRegistry.inMemory(AuthStorage.inMemory()),
-      withSessionWriteLock: async (run) => {
+      withSessionWriteLock: async (run, options) => {
+        lockOptions.push(options);
         events.push("lock:start");
         try {
           return await run();
@@ -383,19 +385,22 @@ describe("createAgentSession tool defaults", () => {
     });
 
     expect(events).toEqual(["lock:start", "hook", "lock:end"]);
+    expect(lockOptions).toEqual([{ publishOwnedWrite: true }]);
   });
 
   it("fences tool execution when no extension hook is registered", async () => {
     // Write-capable tools still enter the lock even without hooks; the lock is
     // about shared session state, not just extension execution.
     const events: string[] = [];
+    const lockOptions: Array<{ publishOwnedWrite?: boolean } | undefined> = [];
     const { session } = await createAgentSession({
       model: testModel,
       resourceLoader: createEmptyResourceLoader(),
       sessionManager: SessionManager.inMemory(),
       settingsManager: SettingsManager.inMemory(),
       modelRegistry: ModelRegistry.inMemory(AuthStorage.inMemory()),
-      withSessionWriteLock: async (run) => {
+      withSessionWriteLock: async (run, options) => {
+        lockOptions.push(options);
         events.push("lock:start");
         try {
           return await run();
@@ -433,5 +438,6 @@ describe("createAgentSession tool defaults", () => {
     });
 
     expect(events).toEqual(["lock:start", "lock:end"]);
+    expect(lockOptions).toEqual([{ publishOwnedWrite: true }]);
   });
 });
