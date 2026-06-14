@@ -1462,6 +1462,11 @@ async function runNativeHookRelayPermissionRequest(params: {
   invocation: NativeHookRelayInvocation;
   adapter: NativeHookRelayProviderAdapter;
 }): Promise<NativeHookRelayProcessResponse> {
+  // Codex runs PermissionRequest before its guarded reviewer. The payload carries
+  // the active turn policy, so guarded turns must defer instead of double-prompting.
+  if (params.registration.provider === "codex" && params.invocation.permissionMode === "default") {
+    return params.adapter.renderNoopResponse(params.invocation.event);
+  }
   const request: NativeHookRelayPermissionApprovalRequest = {
     provider: params.registration.provider,
     ...(params.registration.agentId ? { agentId: params.registration.agentId } : {}),
