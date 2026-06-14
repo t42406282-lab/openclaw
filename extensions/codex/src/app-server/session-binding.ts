@@ -188,13 +188,17 @@ type CodexAppServerBindingMutation =
     }
   | {
       kind: "reclaim-generation";
-      isCurrentSessionGeneration: () => boolean;
+      expectedPreviousSessionId: string;
     }
   | { kind: "clear"; threadId?: string };
 
 export type CodexSessionGenerationAdoptionResult = "adopted" | "current" | "absent" | "conflict";
 
 export type CodexSessionGenerationRetirementResult = "applied" | "absent" | "conflict";
+
+export type CodexSessionGenerationReclaimPlan =
+  | { kind: "resolved"; result: boolean }
+  | { kind: "verify"; expectedPreviousSessionId: string };
 
 const bindingLeaseSchema = z.object({
   token: z.string().refine((value) => Boolean(value.trim())),
@@ -288,6 +292,9 @@ export type CodexAppServerBindingStore = {
     identity: CodexAppServerBindingIdentity,
     mutation: CodexAppServerBindingMutation,
   ): Promise<boolean>;
+  prepareSessionGenerationReclaim(
+    identity: Extract<CodexAppServerBindingIdentity, { kind: "session" }>,
+  ): Promise<CodexSessionGenerationReclaimPlan>;
   adoptSessionGeneration(
     identity: Extract<CodexAppServerBindingIdentity, { kind: "session" }>,
     expectedPreviousSessionId: string,
@@ -308,22 +315,33 @@ export async function reclaimCurrentCodexSessionGeneration(params: {
   if (!sessionKey) {
     return true;
   }
+  const plan = await params.bindingStore.prepareSessionGenerationReclaim(params.identity);
+  if (plan.kind === "resolved") {
+    return plan.result;
+  }
+
+  // Only a stale stable-key owner needs filesystem authority. Resolve it before
+  // the second mutation so session JSON work never runs inside SQLite's write transaction.
+  try {
+    const storePath = resolveStorePath(params.config?.session?.store, {
+      agentId: params.identity.agentId,
+    });
+    const entry = resolveSessionStoreEntry({
+      store: loadSessionStore(storePath, {
+        skipCache: true,
+        hydrateSkillPromptRefs: false,
+      }),
+      sessionKey,
+    }).existing;
+    if (entry?.sessionId !== params.identity.sessionId) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
   return await params.bindingStore.mutate(params.identity, {
     kind: "reclaim-generation",
-    isCurrentSessionGeneration: () => {
-      try {
-        const storePath = resolveStorePath(params.config?.session?.store, {
-          agentId: params.identity.agentId,
-        });
-        const entry = resolveSessionStoreEntry({
-          store: loadSessionStore(storePath, { skipCache: true }),
-          sessionKey,
-        }).existing;
-        return entry?.sessionId === params.identity.sessionId;
-      } catch {
-        return false;
-      }
-    },
+    expectedPreviousSessionId: plan.expectedPreviousSessionId,
   });
 }
 
@@ -444,6 +462,26 @@ export function createCodexAppServerBindingStore(
         : undefined;
     },
 
+    async prepareSessionGenerationReclaim(identity) {
+      const key = bindingStoreKey(identity);
+      const raw = state.lookup(key);
+      const current = readStoredBinding(raw);
+      if (raw !== undefined && !current) {
+        throw new Error(`Invalid Codex app-server binding row: ${key}`);
+      }
+      if (!current) {
+        return { kind: "resolved", result: true };
+      }
+      const currentSessionId = current.sessionId;
+      if (!currentSessionId || currentSessionId === identity.sessionId) {
+        return {
+          kind: "resolved",
+          result: current.state !== "cleared" || current.retired !== true,
+        };
+      }
+      return { kind: "verify", expectedPreviousSessionId: currentSessionId };
+    },
+
     async mutate(identity, mutation) {
       const key = bindingStoreKey(identity);
       // A retained legacy sidecar may be revisited by doctor after runtime
@@ -467,7 +505,7 @@ export function createCodexAppServerBindingStore(
                 result: current.state !== "cleared" || current.retired !== true,
               };
             }
-            if (!mutation.isCurrentSessionGeneration()) {
+            if (current.sessionId !== mutation.expectedPreviousSessionId) {
               return { result: false };
             }
             return {

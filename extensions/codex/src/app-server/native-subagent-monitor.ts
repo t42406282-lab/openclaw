@@ -12,7 +12,7 @@ import {
   type AgentHarnessTaskRuntimeScope,
 } from "openclaw/plugin-sdk/agent-harness-task-runtime";
 import { asFiniteNumber, normalizeOptionalString } from "openclaw/plugin-sdk/string-coerce-runtime";
-import type { CodexAppServerClient } from "./client.js";
+import { compareCodexAppServerVersions, type CodexAppServerClient } from "./client.js";
 import {
   extractCodexNativeSubagentCompletions,
   type CodexNativeSubagentCompletion,
@@ -36,7 +36,7 @@ type NativeSubagentMonitorRuntime = {
 
 type NativeSubagentMonitorClient = Pick<
   CodexAppServerClient,
-  "request" | "addNotificationHandler" | "addCloseHandler"
+  "request" | "addNotificationHandler" | "addCloseHandler" | "getServerVersion"
 >;
 
 type ParentState = {
@@ -100,6 +100,7 @@ const DEFAULT_COMPLETION_DELIVERY_RETRY_DELAYS_MS = [
 ];
 const RECENT_TERMINAL_TASK_RECONCILE_GRACE_MS = 60_000;
 const THREAD_READ_TIMEOUT_MS = 30_000;
+const LIVE_THREAD_TURNS_SNAPSHOT_VERSION = "0.139.0";
 const NATIVE_SUBAGENT_NOTIFICATION_METHODS = new Set([
   "thread/started",
   "thread/status/changed",
@@ -485,6 +486,19 @@ export class CodexNativeSubagentMonitor {
     );
   }
 
+  private requestLatestThreadTurn(childThreadId: string) {
+    return this.client.request(
+      "thread/turns/list",
+      {
+        threadId: childThreadId,
+        limit: 1,
+        sortDirection: "desc",
+        itemsView: "full",
+      },
+      { timeoutMs: THREAD_READ_TIMEOUT_MS },
+    );
+  }
+
   private async readThreadRecovery(childThreadId: string): Promise<ThreadRecovery> {
     // Fresh threads can expose lineage before includeTurns history is materialized.
     // Register that lineage now so the normal child backoff owns later full reads.
@@ -495,9 +509,36 @@ export class CodexNativeSubagentMonitor {
     if (!thread || readString(thread, "id")?.trim() !== childThreadId) {
       return {};
     }
+    const threadStatus = isJsonObject(thread.status)
+      ? normalizeIdentifier(readString(thread.status, "type"))
+      : undefined;
+    let completion: RecoveredCompletion | undefined;
+    if (threadStatus === "active") {
+      completion = undefined;
+    } else if (threadStatus === "systemerror") {
+      const version = this.client.getServerVersion();
+      // Codex 0.139 makes thread/turns/list merge the live active snapshot.
+      // Older custom binaries cannot safely distinguish it from stale history.
+      if (
+        version &&
+        compareCodexAppServerVersions(version, LIVE_THREAD_TURNS_SNAPSHOT_VERSION) >= 0
+      ) {
+        const turnsResponse = await this.requestLatestThreadTurn(childThreadId).catch(
+          () => undefined,
+        );
+        const data =
+          isJsonObject(turnsResponse) && Array.isArray(turnsResponse.data)
+            ? turnsResponse.data
+            : [];
+        const latestTurn = isJsonObject(data[0]) ? data[0] : undefined;
+        completion = latestTurn ? readTurnCompletion(latestTurn, childThreadId) : undefined;
+      }
+    } else {
+      completion = readThreadCompletion(thread, childThreadId);
+    }
     return {
       parentThreadId: readThreadParentThreadId(thread),
-      completion: readThreadCompletion(thread, childThreadId),
+      completion,
     };
   }
 
@@ -918,44 +959,51 @@ function readThreadCompletion(
     if (!isJsonObject(turn)) {
       continue;
     }
-    const status = normalizeIdentifier(readString(turn, "status"));
-    if (status === "inprogress" || !status) {
-      return undefined;
-    }
-    const result = readLastAgentMessage(turn);
-    const completedAtSeconds = asFiniteNumber(turn.completedAt);
-    const completedAt =
-      completedAtSeconds === undefined ? undefined : Math.round(completedAtSeconds * 1_000);
-    if (status === "completed") {
-      return {
-        childThreadId,
-        status: "succeeded",
-        statusLabel: result ? "task_complete" : "completed_without_final_message",
-        result: result ?? "Codex native subagent completed without a final assistant message.",
-        completedAt,
-      };
-    }
-    if (status === "interrupted") {
-      return {
-        childThreadId,
-        status: "cancelled",
-        statusLabel: "task_interrupted",
-        result: result ?? "Codex native subagent was interrupted.",
-        completedAt,
-      };
-    }
-    if (status === "failed") {
-      const turnError = turn.error;
-      const error = isJsonObject(turnError) ? readString(turnError, "message")?.trim() : undefined;
-      return {
-        childThreadId,
-        status: "failed",
-        statusLabel: "task_failed",
-        result: result ?? error ?? "Codex native subagent failed.",
-        completedAt,
-      };
-    }
+    return readTurnCompletion(turn, childThreadId);
+  }
+  return undefined;
+}
+
+function readTurnCompletion(
+  turn: JsonObject,
+  childThreadId: string,
+): RecoveredCompletion | undefined {
+  const status = normalizeIdentifier(readString(turn, "status"));
+  if (status === "inprogress" || !status) {
     return undefined;
+  }
+  const result = readLastAgentMessage(turn);
+  const completedAtSeconds = asFiniteNumber(turn.completedAt);
+  const completedAt =
+    completedAtSeconds === undefined ? undefined : Math.round(completedAtSeconds * 1_000);
+  if (status === "completed") {
+    return {
+      childThreadId,
+      status: "succeeded",
+      statusLabel: result ? "task_complete" : "completed_without_final_message",
+      result: result ?? "Codex native subagent completed without a final assistant message.",
+      completedAt,
+    };
+  }
+  if (status === "interrupted") {
+    return {
+      childThreadId,
+      status: "cancelled",
+      statusLabel: "task_interrupted",
+      result: result ?? "Codex native subagent was interrupted.",
+      completedAt,
+    };
+  }
+  if (status === "failed") {
+    const turnError = turn.error;
+    const error = isJsonObject(turnError) ? readString(turnError, "message")?.trim() : undefined;
+    return {
+      childThreadId,
+      status: "failed",
+      statusLabel: "task_failed",
+      result: result ?? error ?? "Codex native subagent failed.",
+      completedAt,
+    };
   }
   return undefined;
 }

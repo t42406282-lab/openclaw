@@ -284,6 +284,37 @@ describe("Codex app-server binding store", () => {
     await expect(store.read(third)).resolves.toMatchObject({ threadId: "thread-1" });
   });
 
+  it("rejects reclaim when another session generation wins after verification", async () => {
+    const { state } = createStateStore();
+    const store = createCodexAppServerBindingStore(state);
+    const first = {
+      kind: "session" as const,
+      agentId: "main",
+      sessionId: "session-1",
+      sessionKey: "agent:main:telegram:chat-1",
+    };
+    const second = { ...first, sessionId: "session-2" };
+    const third = { ...first, sessionId: "session-3" };
+    await store.mutate(first, {
+      kind: "set",
+      binding: { threadId: "thread-1", cwd: "/repo" },
+    });
+
+    const plan = await store.prepareSessionGenerationReclaim(second);
+    expect(plan).toEqual({ kind: "verify", expectedPreviousSessionId: first.sessionId });
+    await expect(store.adoptSessionGeneration(third, first.sessionId)).resolves.toBe("adopted");
+    if (plan.kind !== "verify") {
+      throw new Error("expected stale session generation");
+    }
+    await expect(
+      store.mutate(second, {
+        kind: "reclaim-generation",
+        expectedPreviousSessionId: plan.expectedPreviousSessionId,
+      }),
+    ).resolves.toBe(false);
+    await expect(store.read(third)).resolves.toMatchObject({ threadId: "thread-1" });
+  });
+
   it("falls back to physical session identity when no stable session key exists", () => {
     const first = { kind: "session" as const, agentId: "main", sessionId: "session-1" };
     const second = { ...first, sessionId: "session-2" };
@@ -390,7 +421,7 @@ describe("Codex app-server binding store", () => {
     await expect(
       store.mutate(current, {
         kind: "reclaim-generation",
-        isCurrentSessionGeneration: () => true,
+        expectedPreviousSessionId: previous.sessionId,
       }),
     ).resolves.toBe(true);
     await expect(
@@ -431,26 +462,28 @@ describe("Codex app-server binding store", () => {
       kind: "set",
       binding: { threadId: "thread-old", cwd: "/old" },
     });
-    const isCurrentSessionGeneration = vi.fn(() => false);
-
     await expect(
-      store.mutate(current, { kind: "reclaim-generation", isCurrentSessionGeneration }),
+      store.mutate(current, {
+        kind: "reclaim-generation",
+        expectedPreviousSessionId: "other-session",
+      }),
     ).resolves.toBe(false);
     expect(values.get(bindingStoreKey(previous))).toMatchObject({
       state: "active",
       sessionId: "session-1",
     });
 
-    isCurrentSessionGeneration.mockReturnValue(true);
     await expect(
-      store.mutate(current, { kind: "reclaim-generation", isCurrentSessionGeneration }),
+      store.mutate(current, {
+        kind: "reclaim-generation",
+        expectedPreviousSessionId: previous.sessionId,
+      }),
     ).resolves.toBe(true);
     expect(values.get(bindingStoreKey(current))).toEqual({
       version: 1,
       state: "cleared",
       sessionId: "session-2",
     });
-    isCurrentSessionGeneration.mockReturnValue(false);
     await expect(
       store.mutate(previous, {
         kind: "set",
@@ -466,7 +499,10 @@ describe("Codex app-server binding store", () => {
     ).resolves.toBe(true);
 
     await expect(
-      store.mutate(previous, { kind: "reclaim-generation", isCurrentSessionGeneration }),
+      store.mutate(previous, {
+        kind: "reclaim-generation",
+        expectedPreviousSessionId: previous.sessionId,
+      }),
     ).resolves.toBe(false);
     await expect(
       store.mutate(previous, {
@@ -527,7 +563,7 @@ describe("Codex app-server binding store", () => {
     await expect(
       store.mutate(current, {
         kind: "reclaim-generation",
-        isCurrentSessionGeneration: () => true,
+        expectedPreviousSessionId: previous.sessionId,
       }),
     ).resolves.toBe(true);
     await expect(

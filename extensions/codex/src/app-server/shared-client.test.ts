@@ -739,6 +739,28 @@ describe("shared Codex app-server client", () => {
     expect(startCall?.commandSource).toBe("resolved-managed");
   });
 
+  it("resolves managed binary metadata once while refreshing credentials per acquire", async () => {
+    const harness = createClientHarness();
+    vi.spyOn(CodexAppServerClient, "start").mockReturnValue(harness.client);
+
+    const firstLeasePromise = leaseSharedCodexAppServerClient({
+      timeoutMs: 1000,
+      authProfileId: "openai:work",
+    });
+    await sendInitializeResult(harness, "openclaw/0.125.0 (macOS; test)");
+    const firstLease = await firstLeasePromise;
+    firstLease.release();
+
+    const secondLease = await leaseSharedCodexAppServerClient({
+      timeoutMs: 1000,
+      authProfileId: "openai:work",
+    });
+    secondLease.release();
+
+    expect(mocks.resolveManagedCodexAppServerStartOptions).toHaveBeenCalledOnce();
+    expect(mocks.bridgeCodexAppServerStartOptions).toHaveBeenCalledTimes(2);
+  });
+
   it("starts an independent shared client when the bridged auth token changes", async () => {
     const first = createClientHarness();
     const second = createClientHarness();

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CodexAppServerClient } from "./client.js";
 import type { JsonValue } from "./protocol.js";
 import { createClientHarness } from "./test-support.js";
-import { getCodexAppServerTurnRouter, type CodexThreadRequestHandler } from "./turn-router.js";
+import { getCodexAppServerTurnRouter, type CodexAppServerServerRequest } from "./turn-router.js";
 
 type ClientHarness = ReturnType<typeof createClientHarness>;
 
@@ -491,7 +491,7 @@ describe("CodexAppServerTurnRouter", () => {
 
   it("routes no-turn requests immediately after activation", async () => {
     const harness = createHarness();
-    const handleRequest: CodexThreadRequestHandler = (request): JsonValue => {
+    const handleRequest = (request: CodexAppServerServerRequest): JsonValue => {
       if (request.method === "execCommandApproval" || request.method === "applyPatchApproval") {
         return { decision: "approved" };
       }

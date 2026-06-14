@@ -36,6 +36,7 @@ const CODEX_APP_SERVER_PARSE_BUFFER_MAX_LINES = 1_000;
 const CODEX_DYNAMIC_TOOL_SERVER_REQUEST_TIMEOUT_MS = 600_000;
 const CODEX_APP_SERVER_STDERR_TAIL_MAX = 2_000;
 const CODEX_APP_SERVER_ABANDONED_THREAD_CREATION_MAX = 128;
+const CODEX_APP_SERVER_LATE_THREAD_CLEANUP_TIMEOUT_MS = 5_000;
 const UNPAIRED_SURROGATE_RE =
   /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
 
@@ -594,20 +595,23 @@ export class CodexAppServerClient {
   }
 
   private unsubscribeLateThreadCreation(threadId: string): void {
-    try {
-      // This late response never registered a local owner, so bypass logical
-      // owner accounting and release the wire subscription directly.
-      this.writeMessage({
-        id: this.nextId++,
-        method: "thread/unsubscribe",
-        params: { threadId },
-      });
-    } catch (error) {
+    // This late response never registered a local owner. Track the wire
+    // release anyway; an unconfirmed cleanup makes this client unsafe to pool.
+    void this.request(
+      "thread/unsubscribe",
+      { threadId },
+      { timeoutMs: CODEX_APP_SERVER_LATE_THREAD_CLEANUP_TIMEOUT_MS },
+    ).catch((error: unknown) => {
       embeddedAgentLog.debug("codex app-server late thread unsubscribe failed", {
         threadId,
         error,
       });
-    }
+      this.closeWithError(
+        new Error(`Codex late thread subscription could not be released: ${threadId}`, {
+          cause: error,
+        }),
+      );
+    });
   }
 
   private retainThreadSubscriptionOwner(threadId: string): void {

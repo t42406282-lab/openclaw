@@ -1061,6 +1061,8 @@ describe("codex conversation binding", () => {
       read: (readIdentity) => testCodexAppServerBindingStore.read(readIdentity),
       mutate: (mutateIdentity, mutation) =>
         testCodexAppServerBindingStore.mutate(mutateIdentity, mutation),
+      prepareSessionGenerationReclaim: (sessionIdentity) =>
+        testCodexAppServerBindingStore.prepareSessionGenerationReclaim(sessionIdentity),
       adoptSessionGeneration: (sessionIdentity, expectedPreviousSessionId) =>
         testCodexAppServerBindingStore.adoptSessionGeneration(
           sessionIdentity,

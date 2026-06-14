@@ -1856,20 +1856,19 @@ export async function runCodexAppServerAttempt(
     if (nativeCompactionPhase) {
       if (nativeCompactionPhase === "started") {
         latestNativeContextUsage = undefined;
-      } else {
-        try {
-          await bindingStore.mutate(bindingIdentity, {
-            kind: "compacted",
-            threadId: thread.threadId,
-            nativeContextUsage: latestNativeContextUsage,
-            modelContextWindow: latestModelContextWindow,
-          });
-        } catch (error) {
-          embeddedAgentLog.warn("failed to persist codex app-server compaction state", {
-            threadId: thread.threadId,
-            error,
-          });
-        }
+      }
+      try {
+        await bindingStore.mutate(bindingIdentity, {
+          kind: "compacted",
+          threadId: thread.threadId,
+          nativeContextUsage: latestNativeContextUsage,
+          modelContextWindow: latestModelContextWindow,
+        });
+      } catch (error) {
+        embeddedAgentLog.warn("failed to persist codex app-server compaction state", {
+          threadId: thread.threadId,
+          error,
+        });
       }
     }
     embeddedAgentLog.trace("codex app-server raw notification received", {

@@ -97,6 +97,8 @@ export async function requestCodexNativeTurnForBinding(
     const terminalTurnsBeforeWatch = new Set<string>();
     let route: CodexThreadRouteReservation | undefined;
     let completionWatch: CodexNativeTurnCompletionWatch | undefined;
+    let observedContextCompaction = false;
+    let bindingInvalidated = false;
     let resolveNativeTurnStarted!: () => void;
     const nativeTurnStarted = new Promise<void>((resolve) => {
       resolveNativeTurnStarted = resolve;
@@ -106,17 +108,21 @@ export async function requestCodexNativeTurnForBinding(
       route = router.reserveThread({
         threadId: currentBinding.threadId,
         onNotificationReceived: (notification, scope) => {
+          const contextCompactionStarted =
+            isCompaction &&
+            Boolean(scope.turnId) &&
+            notification.method === "item/started" &&
+            readCodexNotificationItem(notification.params)?.type === "contextCompaction";
+          if (contextCompactionStarted) {
+            observedContextCompaction = true;
+          }
           if (!awaitingNativeTurnStart || !scope.turnId) {
             return;
           }
           if (isCodexTerminalTurnNotification(notification)) {
             terminalTurnsBeforeWatch.add(scope.turnId);
           }
-          if (
-            isCompaction &&
-            notification.method === "item/started" &&
-            readCodexNotificationItem(notification.params)?.type === "contextCompaction"
-          ) {
+          if (contextCompactionStarted) {
             completionWatch ??= router.watchNativeTurnCompletion({
               threadId: currentBinding.threadId,
               turnId: scope.turnId,
@@ -148,13 +154,10 @@ export async function requestCodexNativeTurnForBinding(
         abandonClient = isCodexAppServerUnsafeSubscriptionError(error);
         throw error;
       }
-      if (resumed.thread.status?.type === "active") {
-        throw new Error(
-          `Codex thread already has an active turn; retry ${label} after it finishes`,
-        );
-      }
-      throwIfCodexNativeTurnAborted(params.abortSignal, kind);
-      if (isCompaction) {
+      const invalidateCompactionBinding = async () => {
+        if (bindingInvalidated) {
+          return;
+        }
         const invalidated = await params.bindingStore.mutate(params.bindingIdentity, {
           kind: "compacted",
           threadId: currentBinding.threadId,
@@ -164,6 +167,19 @@ export async function requestCodexNativeTurnForBinding(
             "Codex thread binding changed before native compaction",
           );
         }
+        bindingInvalidated = true;
+      };
+      if (isCompaction && observedContextCompaction) {
+        await invalidateCompactionBinding();
+      }
+      if (resumed.thread.status?.type === "active") {
+        throw new Error(
+          `Codex thread already has an active turn; retry ${label} after it finishes`,
+        );
+      }
+      throwIfCodexNativeTurnAborted(params.abortSignal, kind);
+      if (isCompaction) {
+        await invalidateCompactionBinding();
       }
       awaitingNativeTurnStart = true;
       let requestResult: JsonValue | undefined;
@@ -179,10 +195,11 @@ export async function requestCodexNativeTurnForBinding(
         const requestRejected = error instanceof CodexAppServerRpcError;
         if (requestRejected) {
           // Codex submits Op::Compact before acknowledging the request. A
-          // structured rejection therefore makes any observed turn unrelated.
+          // structured rejection makes any observed turn unrelated to this request.
+          // That same-thread compaction still invalidates the cached context facts.
           completionWatch?.cancel();
           completionWatch = undefined;
-          if (isCompaction) {
+          if (isCompaction && !observedContextCompaction) {
             const restored = await params.bindingStore.mutate(params.bindingIdentity, {
               kind: "set",
               binding: currentBinding,

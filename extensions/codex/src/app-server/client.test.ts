@@ -355,6 +355,26 @@ describe("CodexAppServerClient", () => {
     });
   });
 
+  it("closes when a late thread creation subscription cannot be released", async () => {
+    const harness = createClientHarness();
+    clients.push(harness.client);
+    const controller = new AbortController();
+    const request = harness.client.request("thread/start", {}, { signal: controller.signal });
+    const outbound = JSON.parse(harness.writes[0] ?? "{}") as { id?: number };
+    const rejected = expect(request).rejects.toThrow("thread/start aborted");
+
+    controller.abort();
+    await rejected;
+    harness.send({ id: outbound.id, result: { thread: { id: "late-thread" } } });
+    const unsubscribe = JSON.parse(harness.writes[1] ?? "{}") as { id?: number };
+    harness.send({
+      id: unsubscribe.id,
+      error: { code: -32_000, message: "unsubscribe failed" },
+    });
+
+    await vi.waitFor(() => expect(harness.stdinDestroyed).toBe(true));
+  });
+
   it("does not unsubscribe a late rejected thread creation", async () => {
     const harness = createClientHarness();
     clients.push(harness.client);

@@ -22,20 +22,20 @@ export type CodexThreadRouteScope = {
   threadId: string;
   turnId?: string;
 };
-export type CodexThreadRequestHandler = (
+type CodexThreadRequestHandler = (
   request: CodexAppServerServerRequest,
   scope: CodexThreadRouteScope,
 ) => Promise<JsonValue | undefined> | JsonValue | undefined;
-export type CodexThreadNotificationHandler = (
+type CodexThreadNotificationHandler = (
   notification: CodexServerNotification,
   scope: CodexThreadRouteScope,
 ) => Promise<void> | void;
-export type CodexThreadNotificationReceivedHandler = (
+type CodexThreadNotificationReceivedHandler = (
   notification: CodexServerNotification,
   scope: CodexThreadRouteScope,
   receivedAtMs: number,
 ) => void;
-export type CodexThreadRouteHandlers = {
+type CodexThreadRouteHandlers = {
   onNotificationReceived?: CodexThreadNotificationReceivedHandler;
   onNotification?: CodexThreadNotificationHandler;
   onRequest?: CodexThreadRequestHandler;

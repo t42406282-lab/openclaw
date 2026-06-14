@@ -1057,6 +1057,9 @@ describe("runCodexAppServerAttempt context-engine lifecycle", () => {
         item: { id: "compact-1", type: "contextCompaction" },
       },
     });
+    const startedBinding = await readCodexAppServerBinding(sessionFile);
+    expect(startedBinding).not.toHaveProperty("nativeContextUsage");
+    expect(startedBinding?.contextEngine).not.toHaveProperty("projection");
     await harness.notify({
       method: "thread/tokenUsage/updated",
       params: {

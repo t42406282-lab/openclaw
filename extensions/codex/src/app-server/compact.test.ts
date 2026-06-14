@@ -739,6 +739,96 @@ describe("maybeCompactCodexAppServerSession", () => {
     });
   });
 
+  it("keeps context facts invalidated when another compaction starts before rejection", async () => {
+    const fake = createFakeCodexClient({ autoStart: false });
+    fake.handleRequest("thread/resume", (params) => {
+      const threadId = (params as { threadId: string }).threadId;
+      fake.emit({
+        method: "item/started",
+        params: {
+          threadId,
+          turnId: "other-compact-turn",
+          item: { id: "other-compact-item", type: "contextCompaction" },
+        },
+      });
+      return createThreadResumeResponse(threadId);
+    });
+    fake.handleRequest("thread/compact/start", () => {
+      throw new CodexAppServerRpcError(
+        { code: -32_000, message: "compaction rejected" },
+        "thread/compact/start",
+      );
+    });
+    setCodexAppServerClientFactoryForTest(async () => fake.client);
+    const sessionFile = await writeTestBinding({
+      nativeContextUsage: { currentTokens: 220_000 },
+      modelContextWindow: 258_400,
+      contextEngine: {
+        schemaVersion: 1,
+        engineId: "lossless-claw",
+        policyFingerprint: "policy-1",
+        projection: {
+          schemaVersion: 1,
+          mode: "thread_bootstrap",
+          epoch: "epoch-1",
+        },
+      },
+    });
+
+    const result = requireCompactResult(await startCompaction(sessionFile));
+
+    expect(result).toMatchObject({
+      ok: false,
+      compacted: false,
+      reason: "compaction rejected",
+    });
+    const binding = await readCodexAppServerBinding(sessionFile);
+    expect(binding).not.toHaveProperty("nativeContextUsage");
+    expect(binding?.contextEngine).not.toHaveProperty("projection");
+  });
+
+  it("invalidates context facts when resume observes an active compaction", async () => {
+    const fake = createFakeCodexClient({ autoStart: false });
+    fake.handleRequest("thread/resume", (params) => {
+      const threadId = (params as { threadId: string }).threadId;
+      fake.emit({
+        method: "item/started",
+        params: {
+          threadId,
+          turnId: "active-compact-turn",
+          item: { id: "active-compact-item", type: "contextCompaction" },
+        },
+      });
+      return createThreadResumeResponse(threadId, { type: "active", activeFlags: [] });
+    });
+    setCodexAppServerClientFactoryForTest(async () => fake.client);
+    const sessionFile = await writeTestBinding({
+      nativeContextUsage: { currentTokens: 220_000 },
+      modelContextWindow: 258_400,
+      contextEngine: {
+        schemaVersion: 1,
+        engineId: "lossless-claw",
+        policyFingerprint: "policy-1",
+        projection: {
+          schemaVersion: 1,
+          mode: "thread_bootstrap",
+          epoch: "epoch-1",
+        },
+      },
+    });
+
+    const result = requireCompactResult(await startCompaction(sessionFile));
+
+    expect(result).toMatchObject({
+      ok: false,
+      compacted: false,
+      reason: "Codex thread already has an active turn; retry compaction after it finishes",
+    });
+    const binding = await readCodexAppServerBinding(sessionFile);
+    expect(binding).not.toHaveProperty("nativeContextUsage");
+    expect(binding?.contextEngine).not.toHaveProperty("projection");
+  });
+
   it("skips native app-server compaction for automatic budget triggers", async () => {
     const fake = createFakeCodexClient();
     setCodexAppServerClientFactoryForTest(async () => fake.client);

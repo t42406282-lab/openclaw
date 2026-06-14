@@ -89,7 +89,7 @@ export function isCodexActiveTurnNotSteerableError(error: unknown): boolean {
 export async function validateCodexThreadCreationResponse<T>(
   owner: {
     client: CodexAppServerClient;
-    abandon?: () => Promise<void>;
+    abandon: () => Promise<void>;
   },
   response: unknown,
   validate: (value: unknown) => T,
@@ -108,7 +108,7 @@ export async function validateCodexThreadCreationResponse<T>(
       throw error;
     }
     try {
-      await owner.abandon?.();
+      await owner.abandon();
     } catch (abandonError) {
       throw new CodexAppServerUnsafeSubscriptionError(
         "Codex thread creation response was invalid and its client could not be retired",
@@ -177,7 +177,6 @@ export async function settleCodexAppServerClientLease(
   lease: CodexAppServerClientLease,
   params: {
     threadId?: string;
-    threadIds?: Iterable<string>;
     timeoutMs: number;
     abandon?: boolean;
   },
@@ -186,17 +185,15 @@ export async function settleCodexAppServerClientLease(
     await lease.abandon();
     return;
   }
-  const threadIds = params.threadIds ?? (params.threadId ? [params.threadId] : []);
-  for (const threadId of threadIds) {
-    if (
-      !(await unsubscribeCodexThreadBestEffort(lease.client, {
-        threadId,
-        timeoutMs: params.timeoutMs,
-      }))
-    ) {
-      await lease.abandon();
-      return;
-    }
+  if (
+    params.threadId &&
+    !(await unsubscribeCodexThreadBestEffort(lease.client, {
+      threadId: params.threadId,
+      timeoutMs: params.timeoutMs,
+    }))
+  ) {
+    await lease.abandon();
+    return;
   }
   lease.release();
 }

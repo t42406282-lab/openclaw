@@ -49,6 +49,9 @@ const pendingStartContexts = new Map<
   string,
   Promise<{ key: string; startContext: ResolvedCodexAppServerClientStartContext }>
 >();
+let managedCommandResolution:
+  | Promise<Pick<CodexAppServerStartOptions, "command" | "commandSource">>
+  | undefined;
 
 /** One caller's exact ownership of a shared physical app-server client. */
 export type CodexAppServerClientLease = {
@@ -139,9 +142,7 @@ async function prepareCodexAppServerClientStartContext(
           config: requested.config,
           ...(authProfileStore ? { authProfileStore } : {}),
         }));
-  const managedStartOptions = await resolveManagedCodexAppServerStartOptions(
-    requested.startOptions,
-  );
+  const managedStartOptions = await resolveProcessManagedStartOptions(requested.startOptions);
   const startOptions = await bridgeCodexAppServerStartOptions({
     startOptions: managedStartOptions,
     agentDir: requested.agentDir,
@@ -150,6 +151,23 @@ async function prepareCodexAppServerClientStartContext(
     ...(authProfileStore ? { authProfileStore } : {}),
   });
   return { ...requested, authProfileId, authProfileStore, startOptions };
+}
+
+async function resolveProcessManagedStartOptions(
+  startOptions: CodexAppServerStartOptions,
+): Promise<CodexAppServerStartOptions> {
+  if (startOptions.transport !== "stdio" || startOptions.commandSource !== "managed") {
+    return startOptions;
+  }
+  // The installed managed binary path is process-stable. Cache only that fact;
+  // credentials and the rest of the caller's start options still refresh per acquire.
+  managedCommandResolution ??= resolveManagedCodexAppServerStartOptions(startOptions).then(
+    (resolved) => ({
+      command: resolved.command,
+      commandSource: resolved.commandSource,
+    }),
+  );
+  return { ...startOptions, ...(await managedCommandResolution) };
 }
 
 function sharedCodexAppServerClientKey(
@@ -445,6 +463,7 @@ export async function createIsolatedCodexAppServerClient(
 /** Clears and closes all shared clients for deterministic tests. */
 export function resetSharedCodexAppServerClientForTests(): void {
   pendingStartContexts.clear();
+  managedCommandResolution = undefined;
   for (const client of detachAllSharedClients()) {
     client.close();
   }
@@ -459,6 +478,7 @@ export async function clearSharedCodexAppServerClientAndWait(options?: {
   exitTimeoutMs?: number;
   forceKillDelayMs?: number;
 }): Promise<void> {
+  managedCommandResolution = undefined;
   for (const client of detachAllSharedClients()) {
     void retireSharedClientAndWait(client, options);
   }

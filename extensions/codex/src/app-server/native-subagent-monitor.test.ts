@@ -10,8 +10,9 @@ import {
 } from "./native-subagent-monitor.js";
 import type { CodexServerNotification, CodexThreadReadResponse, JsonValue } from "./protocol.js";
 
-function createClient() {
+function createClient(options: { serverVersion?: string } = {}) {
   type ThreadReadParams = { threadId?: string; includeTurns?: boolean };
+  type ThreadTurnsParams = { threadId?: string };
   type NotificationHandler = (notification: CodexServerNotification) => Promise<void> | void;
   const notificationHandlers = new Set<NotificationHandler>();
   const requestHandlers = new Set<(request: never) => unknown>();
@@ -22,7 +23,16 @@ function createClient() {
     | Error
     | ((params: ThreadReadParams) => CodexThreadReadResponse | Promise<CodexThreadReadResponse>)
   >();
+  const threadTurns = new Map<string, JsonValue | Error>();
   const request = vi.fn(async (method: string, params?: unknown) => {
+    if (method === "thread/turns/list") {
+      const childThreadId = ((params as ThreadTurnsParams | undefined) ?? {}).threadId ?? "";
+      const response = threadTurns.get(childThreadId);
+      if (response instanceof Error || !response) {
+        throw response ?? new Error(`thread turns not loaded: ${childThreadId}`);
+      }
+      return response;
+    }
     if (method !== "thread/read") {
       throw new Error(`unexpected request: ${method}`);
     }
@@ -36,6 +46,7 @@ function createClient() {
   });
   return {
     request,
+    getServerVersion: () => options.serverVersion ?? "0.139.0",
     setThreadRead(childThreadId: string, response: CodexThreadReadResponse | Error) {
       threadReads.set(childThreadId, response);
     },
@@ -46,6 +57,9 @@ function createClient() {
       ) => CodexThreadReadResponse | Promise<CodexThreadReadResponse>,
     ) {
       threadReads.set(childThreadId, response);
+    },
+    setThreadTurns(childThreadId: string, response: JsonValue | Error) {
+      threadTurns.set(childThreadId, response);
     },
     addNotificationHandler(handler: NotificationHandler) {
       notificationHandlers.add(handler);
@@ -215,6 +229,7 @@ function threadRead(
     previousResult?: string;
     resultPhase?: "commentary" | "final_answer";
     trailingCommentary?: string;
+    threadStatus?: "active" | "idle" | "notLoaded" | "systemError";
   } = {},
 ): CodexThreadReadResponse {
   const childThreadId = params.childThreadId ?? "child-thread";
@@ -251,6 +266,7 @@ function threadRead(
           thread_spawn: { parent_thread_id: parentThreadId, depth: 1 },
         },
       },
+      status: { type: params.threadStatus ?? "idle" },
       turns: [
         ...(params.previousResult
           ? [
@@ -896,7 +912,13 @@ describe("CodexNativeSubagentMonitor", () => {
 
   it("recovers failed child turns and their app-server error", async () => {
     const client = createClient();
-    client.setThreadRead("child-thread", threadRead({ status: "failed", error: "child exploded" }));
+    client.setThreadRead(
+      "child-thread",
+      threadRead({
+        status: "failed",
+        error: "child exploded",
+      }),
+    );
     const runtime = createRuntime();
     const monitor = new CodexNativeSubagentMonitor(client as never, runtime);
     registerParent(monitor);
@@ -923,6 +945,110 @@ describe("CodexNativeSubagentMonitor", () => {
 
     await expect(monitor.reconcileChildThread("child-thread")).resolves.toBe(false);
 
+    expect(runtime.deliverAgentHarnessTaskCompletion).not.toHaveBeenCalled();
+    client.close();
+  });
+
+  it("does not recover persisted completion while the child thread is active", async () => {
+    const client = createClient();
+    client.setThreadRead(
+      "child-thread",
+      threadRead({
+        threadStatus: "active",
+        status: "completed",
+        result: "stale persisted result",
+      }),
+    );
+    const runtime = createRuntime();
+    const monitor = new CodexNativeSubagentMonitor(client as never, runtime);
+    registerParent(monitor);
+    await notifyChildStarted(client);
+
+    await expect(monitor.reconcileChildThread("child-thread")).resolves.toBe(false);
+
+    expect(runtime.deliverAgentHarnessTaskCompletion).not.toHaveBeenCalled();
+    client.close();
+  });
+
+  it("does not replay stale history while a system-error child still has an active turn", async () => {
+    const client = createClient();
+    client.setThreadRead(
+      "child-thread",
+      threadRead({
+        threadStatus: "systemError",
+        status: "failed",
+        error: "stale persisted failure",
+      }),
+    );
+    client.setThreadTurns("child-thread", {
+      data: [{ id: "current-turn", status: "inProgress", items: [] }],
+    });
+    const runtime = createRuntime();
+    const monitor = new CodexNativeSubagentMonitor(client as never, runtime);
+    registerParent(monitor);
+    await notifyChildStarted(client);
+
+    await expect(monitor.reconcileChildThread("child-thread")).resolves.toBe(false);
+
+    expect(runtime.deliverAgentHarnessTaskCompletion).not.toHaveBeenCalled();
+    client.close();
+  });
+
+  it("recovers the authoritative latest failed turn after a system error", async () => {
+    const client = createClient();
+    client.setThreadRead(
+      "child-thread",
+      threadRead({
+        threadStatus: "systemError",
+        status: "completed",
+        result: "stale persisted result",
+      }),
+    );
+    client.setThreadTurns("child-thread", {
+      data: [
+        {
+          id: "current-turn",
+          status: "failed",
+          items: [],
+          error: { message: "current child failure" },
+        },
+      ],
+    });
+    const runtime = createRuntime();
+    const monitor = new CodexNativeSubagentMonitor(client as never, runtime);
+    registerParent(monitor);
+    await notifyChildStarted(client);
+
+    await expect(monitor.reconcileChildThread("child-thread")).resolves.toBe(true);
+
+    expect(runtime.deliverAgentHarnessTaskCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed", result: "current child failure" }),
+    );
+    client.close();
+  });
+
+  it("does not trust stale system-error history from older custom app-servers", async () => {
+    const client = createClient({ serverVersion: "0.125.0" });
+    client.setThreadRead(
+      "child-thread",
+      threadRead({
+        threadStatus: "systemError",
+        status: "failed",
+        error: "possibly stale failure",
+      }),
+    );
+    const runtime = createRuntime();
+    const monitor = new CodexNativeSubagentMonitor(client as never, runtime);
+    registerParent(monitor);
+    await notifyChildStarted(client);
+
+    await expect(monitor.reconcileChildThread("child-thread")).resolves.toBe(false);
+
+    expect(client.request).not.toHaveBeenCalledWith(
+      "thread/turns/list",
+      expect.anything(),
+      expect.anything(),
+    );
     expect(runtime.deliverAgentHarnessTaskCompletion).not.toHaveBeenCalled();
     client.close();
   });
