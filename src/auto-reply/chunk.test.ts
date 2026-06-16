@@ -595,6 +595,13 @@ describe("chunkMarkdownTextWithMode", () => {
     ]);
   });
 
+  it("keeps table row newlines inside the table in newline mode", () => {
+    const table = ["| A | B |", "|---|---|", "| C | D |"].join("\n");
+    const text = ["Intro line", table, "Tail"].join("\n");
+
+    expect(chunkMarkdownTextWithMode(text, 31, "newline")).toEqual(["Intro line", table, "Tail"]);
+  });
+
   it("does not split surrogate pairs at hard length boundaries", () => {
     const text = `a${"😀".repeat(20_000)}`;
     const chunks = chunkMarkdownTextWithMode(text, 32_768, "length");

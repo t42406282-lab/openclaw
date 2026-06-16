@@ -7,6 +7,7 @@ import {
   isSafeFenceBreak,
   parseFenceSpans,
 } from "../../packages/markdown-core/src/fences.js";
+import { isSafeTableBreak, parseTableSpans } from "../../packages/markdown-core/src/table-spans.js";
 import type { ChannelId } from "../channels/plugins/types.core.js";
 import { resolveChannelStreamingChunkMode } from "../channels/streaming.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
@@ -387,6 +388,7 @@ export function chunkMarkdownText(text: string, limit: number): string[] {
 
   const chunks: string[] = [];
   const spans = parseFenceSpans(text);
+  const tableSpans = parseTableSpans(text);
   let start = 0;
   let reopenFence: ReturnType<typeof findFenceSpanAt> | undefined;
 
@@ -402,7 +404,7 @@ export function chunkMarkdownText(text: string, limit: number): string[] {
     }
 
     const windowEnd = Math.min(text.length, start + contentLimit);
-    const softBreak = pickSafeBreakIndex(text, start, windowEnd, spans);
+    const softBreak = pickSafeBreakIndex(text, start, windowEnd, spans, tableSpans);
     let breakIdx = softBreak > start ? softBreak : windowEnd;
 
     const initialFence = isSafeFenceBreak(spans, breakIdx)
@@ -500,9 +502,13 @@ function pickSafeBreakIndex(
   start: number,
   end: number,
   spans: ReturnType<typeof parseFenceSpans>,
+  tableSpans: ReturnType<typeof parseTableSpans>,
 ): number {
-  const { lastNewline, lastWhitespace } = scanParenAwareBreakpoints(text, start, end, (index) =>
-    isSafeFenceBreak(spans, index),
+  const { lastNewline, lastWhitespace } = scanParenAwareBreakpoints(
+    text,
+    start,
+    end,
+    (index) => isSafeFenceBreak(spans, index) && isSafeTableBreak(tableSpans, index),
   );
 
   if (lastNewline > start) {

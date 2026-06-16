@@ -54,7 +54,7 @@ describe("subscribeEmbeddedAgentSession", () => {
       onBlockReply,
       chunking: {
         minChars: 5,
-        maxChars: 25,
+        maxChars: 80,
       },
     });
 
