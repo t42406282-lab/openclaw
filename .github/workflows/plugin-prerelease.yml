@@ -344,7 +344,11 @@ jobs:
           OPENCLAW_EXTENSION_BATCH_PARALLEL: 2
           OPENCLAW_VITEST_MAX_WORKERS: 1
           OPENCLAW_EXTENSION_BATCH: ${{ matrix.extensions_csv }}
-        run: pnpm test:extensions:batch "$OPENCLAW_EXTENSION_BATCH" -- --exclude extensions/codex/src/app-server/run-attempt.test.ts
+        run: |
+          pnpm test:extensions:batch "$OPENCLAW_EXTENSION_BATCH" -- \
+            --exclude extensions/codex/src/app-server/run-attempt.test.ts \
+            --exclude extensions/codex/src/app-server/run-attempt.dynamic-tools.test.ts \
+            --exclude extensions/codex/src/app-server/run-attempt.turn-watches.test.ts
 
   plugin-prerelease-inspector:
     permissions:
