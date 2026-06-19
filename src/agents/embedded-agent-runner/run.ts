@@ -1861,8 +1861,8 @@ async function runEmbeddedAgentInternal(
           } else {
             parentAbortSignal?.addEventListener("abort", relayParentAbort, { once: true });
           }
-          // Native attempts start the heartbeat only after their own timeout
-          // watchdog is armed, keeping preflight inside the requested deadline.
+          // Attempts start the heartbeat only after their own timeout watchdog
+          // is armed, keeping preflight inside the requested deadline.
           let progressInterval: ReturnType<typeof setInterval> | undefined;
           const stopLaneProgressHeartbeat = () => {
             if (progressInterval) {
