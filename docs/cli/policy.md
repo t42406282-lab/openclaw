@@ -190,8 +190,7 @@ when a concrete rule is present. OpenClaw reads current `channels.*` settings
 settings, direct-message session scope, channel DM policy, channel group policy,
 channel/group mention gates, Gateway bind/auth/Control UI/Tailscale/remote/HTTP
 posture, OpenClaw config agent sandbox workspace access and tool deny posture,
-configured Feeds plugin source declarations, OpenClaw config agent sandbox
-workspace access and tool deny posture, data-handling config posture, config
+configured Feeds plugin source declarations, data-handling config posture, config
 secret provider and SecretRef provenance, config auth profile metadata, configured
 global/per-agent tool posture, and `TOOLS.md` declarations as evidence, then
 reports observed state that does not conform. If a policy denies non-loopback

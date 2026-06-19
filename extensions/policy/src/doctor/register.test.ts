@@ -1016,7 +1016,7 @@ describe("registerPolicyDoctorChecks", () => {
         ctx(configPath, {
           ...cfgWithPolicy(),
           plugins: {
-            ...(pluginSettings.plugins ?? {}),
+            ...pluginSettings.plugins,
             entries: {
               policy: {
                 enabled: true,

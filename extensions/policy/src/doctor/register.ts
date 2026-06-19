@@ -596,6 +596,7 @@ const SUPPORTED_POLICY_SECTIONS = [
   "channels",
   "dataHandling",
   "execApprovals",
+  "feeds",
   "gateway",
   "ingress",
   "mcp",
