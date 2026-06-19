@@ -3154,7 +3154,7 @@ function feedPluginEnabledForPolicy(
   const deny = readStringArray(plugins.deny);
   return (
     plugins.enabled !== false &&
-    feeds.enabled === true &&
+    feeds.enabled !== false &&
     !deny.includes("feeds") &&
     (allow.length === 0 || allow.includes("feeds"))
   );

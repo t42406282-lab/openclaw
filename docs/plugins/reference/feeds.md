@@ -38,13 +38,13 @@ integrity.
               "id": "company-approved",
               "url": "https://feeds.example.com/openclaw/feed.json",
               "trust": "pinned",
-              "integrity": "sha256:..."
-            }
-          ]
-        }
-      }
-    }
-  }
+              "integrity": "sha256:...",
+            },
+          ],
+        },
+      },
+    },
+  },
 }
 ```
 
@@ -84,18 +84,18 @@ Use `--dry-run` to print the underlying install command without running it. Use
         "config": {
           "installPolicy": {
             "mode": "enforce",
-            "requireApproval": true
+            "requireApproval": true,
           },
           "sources": [
             {
               "id": "company-approved",
-              "url": "file:///opt/openclaw/feeds/company.json"
-            }
-          ]
-        }
-      }
-    }
-  }
+              "url": "file:///opt/openclaw/feeds/company.json",
+            },
+          ],
+        },
+      },
+    },
+  },
 }
 ```
 
@@ -129,20 +129,20 @@ To make native search use feeds by default, configure the bundled Feeds plugin:
         "config": {
           "search": {
             "default": true,
-            "sources": ["company-approved"]
+            "sources": ["company-approved"],
           },
           "sources": [
             {
               "id": "company-approved",
               "url": "https://feeds.example.com/openclaw/feed.json",
               "trust": "pinned",
-              "integrity": "sha256:..."
-            }
-          ]
-        }
-      }
-    }
-  }
+              "integrity": "sha256:...",
+            },
+          ],
+        },
+      },
+    },
+  },
 }
 ```
 
