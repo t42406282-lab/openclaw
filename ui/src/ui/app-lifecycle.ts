@@ -1,4 +1,4 @@
-import { appRouter, routeLoadContext, startAppRouter, type RouteId } from "../app-routes.ts";
+import { appRouter, getVisibleRouteId, routeLoadContext, startAppRouter } from "../app-routes.ts";
 import type { SettingsHost } from "../app/app-host.ts";
 import { createBrowserHistory } from "../app/browser.ts";
 // Control UI module implements app lifecycle behavior.
@@ -18,12 +18,7 @@ import {
   syncThemeWithSettings,
 } from "./app-settings.ts";
 import { persistChatComposerState, restoreChatComposerState } from "./chat/composer-persistence.ts";
-import {
-  beginControlUiRouteTiming,
-  cancelControlUiRouteTiming,
-  completeControlUiRouteTiming,
-  startControlUiResponsivenessObserver,
-} from "./control-ui-performance.ts";
+import { startControlUiResponsivenessObserver } from "./control-ui-performance.ts";
 import { loadControlUiBootstrapConfig } from "./controllers/control-ui-bootstrap.ts";
 import { stopWorkboardLifecycleRefresh, stopWorkboardPolling } from "./controllers/workboard.ts";
 import type { ChatQueueItem } from "./ui-types.ts";
@@ -87,12 +82,10 @@ type LifecycleHost = {
   logsScrollFrame?: number | null;
   activityScrollFrame?: number | null;
   sessionsChangedReloadTimer?: number | ReturnType<typeof globalThis.setTimeout> | null;
-  controlUiRoutePaintSeq?: number;
   controlUiResponsivenessObserver?: { disconnect: () => void } | null;
   controlUiBootstrapReady?: Promise<void> | null;
   topbarObserver: ResizeObserver | null;
   requestUpdate?: () => void;
-  routeSubscription?: () => void;
   sessionLocationSubscription?: () => void;
 };
 
@@ -100,7 +93,6 @@ export function handleConnected(host: LifecycleHost) {
   const connectGeneration = ++host.connectGeneration;
   host.basePath = inferBasePath();
   const history = createBrowserHistory();
-  let previousActiveRouteId: RouteId = "chat";
   applySettingsFromUrl(host as unknown as Parameters<typeof applySettingsFromUrl>[0]);
   host.controlUiBootstrapReady = loadControlUiBootstrapConfig(
     host as unknown as Parameters<typeof loadControlUiBootstrapConfig>[0],
@@ -124,32 +116,6 @@ export function handleConnected(host: LifecycleHost) {
   if (host.connectGeneration === connectGeneration) {
     connectGateway(host as unknown as Parameters<typeof connectGateway>[0]);
   }
-  host.routeSubscription?.();
-  host.routeSubscription = appRouter.subscribeSelector(
-    (state) => ({
-      status: state.status,
-      pendingRouteId: state.pendingMatches[0]?.routeId,
-      activeRouteId: state.matches[0]?.routeId,
-    }),
-    (next) => {
-      const previousRouteId = next.activeRouteId ?? previousActiveRouteId;
-      const pendingRouteId = next.pendingRouteId;
-      if (next.status === "loading" && pendingRouteId && pendingRouteId !== previousRouteId) {
-        clearPendingSessionsChangedReload(host);
-        beginControlUiRouteTiming(host, previousRouteId, pendingRouteId);
-      } else if (next.status === "error") {
-        cancelControlUiRouteTiming(host);
-      }
-      if (next.status === "success" && next.activeRouteId) {
-        previousActiveRouteId = next.activeRouteId;
-        completeControlUiRouteTiming(host, next.activeRouteId);
-      }
-    },
-    (previous, next) =>
-      previous.status === next.status &&
-      previous.pendingRouteId === next.pendingRouteId &&
-      previous.activeRouteId === next.activeRouteId,
-  );
   void Promise.resolve(
     startAppRouter(history, host.basePath, routeLoadContext(host as unknown as SettingsHost)),
   ).catch(() => undefined);
@@ -225,9 +191,6 @@ function clearPendingSessionsChangedReload(host: LifecycleHost) {
 
 export function handleDisconnected(host: LifecycleHost) {
   host.connectGeneration += 1;
-  cancelControlUiRouteTiming(host);
-  host.routeSubscription?.();
-  host.routeSubscription = undefined;
   host.sessionLocationSubscription?.();
   host.sessionLocationSubscription = undefined;
   appRouter.stop();
@@ -264,7 +227,7 @@ export function handleDisconnected(host: LifecycleHost) {
 }
 
 export function handleUpdated(host: LifecycleHost, changed: Map<PropertyKey, unknown>) {
-  const routeId = appRouter.getState().matches[0]?.routeId ?? "chat";
+  const routeId = getVisibleRouteId();
   if (changed.has("connected") && host.connected) {
     void appRouter
       .revalidate(routeLoadContext(host as unknown as SettingsHost))
