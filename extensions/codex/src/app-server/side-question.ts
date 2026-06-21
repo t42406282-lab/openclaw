@@ -34,6 +34,7 @@ import {
   resolveOpenClawExecPolicyForCodexAppServer,
   resolveCodexAppServerRuntime,
   resolveCodexModelBackedReviewerPolicyContext,
+  isCodexSandboxExecServerEnabled,
   shouldAutoApproveCodexAppServerApprovals,
 } from "./config.js";
 import {
@@ -246,6 +247,26 @@ export async function runCodexAppServerSideQuestion(
     const turnRouter = getCodexAppServerTurnRouter(client);
     const cwd = binding.cwd || params.workspaceDir || process.cwd();
     const sideRunParams = buildSideRunAttemptParams(params, { cwd, authProfileId });
+    const sandboxSessionKey =
+      params.sandboxSessionKey?.trim() ||
+      params.sessionKey?.trim() ||
+      params.sessionId ||
+      sessionAgentId;
+    const sandbox = await resolveSandboxContext({
+      config: params.cfg,
+      agentId: sessionAgentId,
+      sessionKey: sandboxSessionKey,
+      workspaceDir: cwd,
+    });
+    const nativeToolSurfaceEnabled = shouldEnableCodexAppServerNativeToolSurface(
+      sideRunParams,
+      sandbox,
+      {
+        agentId: sessionAgentId,
+        runtimeSessionKey: sandboxSessionKey,
+        sandboxExecServerEnabled: isCodexSandboxExecServerEnabled(pluginConfig),
+      },
+    );
     const hookChannelFields = buildAgentHookContextChannelFields({
       sessionKey: params.sessionKey,
       messageChannel: params.messageChannel,
@@ -279,6 +300,10 @@ export async function runCodexAppServerSideQuestion(
       sessionAgentId,
       runId: sideRunParams.runId,
       hookChannelFields,
+      sandbox,
+      sandboxSessionKey,
+      nativeToolSurfaceEnabled,
+      nativeProviderWebSearchSupport,
       signal: runAbortController.signal,
     });
     const handleServerRequest = async (request: CodexAppServerServerRequest) => {
@@ -310,16 +335,16 @@ export async function runCodexAppServerSideQuestion(
           threadId: childThreadId,
           turnId,
           nativeHookRelay,
-	          execPolicy,
-	          execReviewerAgentId: sessionAgentId,
-	          internalExecAutoReview: modelScopedAppServer.approvalsReviewer === "user",
-	          autoApprove: shouldAutoApproveCodexAppServerApprovals({
-	            approvalPolicy,
-	            networkProxy: modelScopedAppServer.networkProxy,
-	            sandbox,
-	          }),
-	          signal: runAbortController.signal,
-	        });
+          execPolicy,
+          execReviewerAgentId: sessionAgentId,
+          internalExecAutoReview: modelScopedAppServer.approvalsReviewer === "user",
+          autoApprove: shouldAutoApproveCodexAppServerApprovals({
+            approvalPolicy,
+            networkProxy: modelScopedAppServer.networkProxy,
+            sandbox,
+          }),
+          signal: runAbortController.signal,
+        });
       }
       if (request.method !== "item/tool/call") {
         return undefined;
@@ -412,7 +437,7 @@ export async function runCodexAppServerSideQuestion(
           cwd,
           approvalPolicy,
           approvalsReviewer: modelScopedAppServer.approvalsReviewer,
-	          ...(modelScopedAppServer.networkProxy ? {} : { sandbox }),
+          ...(modelScopedAppServer.networkProxy ? {} : { sandbox }),
           ...(serviceTier ? { serviceTier } : {}),
           config: threadConfig,
           developerInstructions: SIDE_DEVELOPER_INSTRUCTIONS,
@@ -662,6 +687,10 @@ async function createCodexSideToolBridge(input: {
   sessionAgentId: string;
   runId: string;
   hookChannelFields: ReturnType<typeof buildAgentHookContextChannelFields>;
+  sandbox: Awaited<ReturnType<typeof resolveSandboxContext>>;
+  sandboxSessionKey: string;
+  nativeToolSurfaceEnabled: boolean;
+  nativeProviderWebSearchSupport: CodexNativeWebSearchSupport;
   signal: AbortSignal;
 }): Promise<{ toolBridge: CodexDynamicToolBridge; webSearchPlan: CodexWebSearchPlan }> {
   const runtimeModel =
@@ -670,25 +699,19 @@ async function createCodexSideToolBridge(input: {
   const messageToolProvider = resolveCodexMessageToolProvider(input.params);
   const modelHasVision = runtimeModel.input?.includes("image") ?? false;
   let tools: AnyAgentTool[] = [];
+  const webSearchPlan = resolveCodexWebSearchPlan({
+    config: input.params.cfg,
+    nativeToolSurfaceEnabled: input.nativeToolSurfaceEnabled,
+    nativeProviderWebSearchSupport: input.nativeProviderWebSearchSupport,
+  });
   if (supportsModelTools(runtimeModel)) {
     const createOpenClawCodingTools = (await import("openclaw/plugin-sdk/agent-harness"))
       .createOpenClawCodingTools;
-    const sandboxSessionKey =
-      input.params.sandboxSessionKey?.trim() ||
-      input.params.sessionKey?.trim() ||
-      input.params.sessionId ||
-      input.sessionAgentId;
-    const sandbox = await resolveSandboxContext({
-      config: input.params.cfg,
-      agentId: input.sessionAgentId,
-      sessionKey: sandboxSessionKey,
-      workspaceDir: input.cwd,
-    });
     const allTools = createOpenClawCodingTools({
       agentId: input.sessionAgentId,
-      sessionKey: sandboxSessionKey,
+      sessionKey: input.sandboxSessionKey,
       runSessionKey:
-        input.params.sessionKey && input.params.sessionKey !== sandboxSessionKey
+        input.params.sessionKey && input.params.sessionKey !== input.sandboxSessionKey
           ? input.params.sessionKey
           : undefined,
       sessionId: input.params.sessionId,
@@ -697,7 +720,7 @@ async function createCodexSideToolBridge(input: {
         input.params.agentDir ?? resolveAgentDir(input.params.cfg ?? {}, input.sessionAgentId),
       workspaceDir: input.cwd,
       spawnWorkspaceDir: resolveAttemptSpawnWorkspaceDir({
-        sandbox,
+        sandbox: input.sandbox,
         resolvedWorkspace: input.params.workspaceDir ?? input.cwd,
       }),
       config: input.params.cfg,
@@ -713,7 +736,7 @@ async function createCodexSideToolBridge(input: {
       modelAuthMode: resolveModelAuthMode(runtimeModel.provider, input.params.cfg, undefined, {
         workspaceDir: input.cwd,
       }),
-      suppressManagedWebSearch: false,
+      suppressManagedWebSearch: webSearchPlan.suppressManagedWebSearch,
       ...(input.params.messageProvider || input.params.messageChannel
         ? {
             messageProvider: messageToolProvider,
@@ -743,7 +766,7 @@ async function createCodexSideToolBridge(input: {
         : {}),
       ...(input.params.currentChannelId ? { currentChannelId: input.params.currentChannelId } : {}),
       hookChannelId: input.hookChannelFields.channelId,
-      sandbox,
+      sandbox: input.sandbox,
       emitBeforeToolCallDiagnostics: false,
       modelHasVision,
       requireExplicitMessageTarget: true,
@@ -754,20 +777,23 @@ async function createCodexSideToolBridge(input: {
       hasInboundImages: false,
     });
   }
-  return createCodexDynamicToolBridge({
-    tools,
-    signal: input.signal,
-    loading: resolveCodexDynamicToolsLoading(input.pluginConfig),
-    hookContext: {
-      agentId: input.sessionAgentId,
-      config: input.params.cfg,
-      sessionId: input.params.sessionId,
-      sessionKey: input.params.sessionKey,
-      runId: input.runId,
-      currentChannelProvider: messageToolProvider,
-      ...input.hookChannelFields,
-    },
-  });
+  return {
+    toolBridge: createCodexDynamicToolBridge({
+      tools,
+      signal: input.signal,
+      loading: resolveCodexDynamicToolsLoading(input.pluginConfig),
+      hookContext: {
+        agentId: input.sessionAgentId,
+        config: input.params.cfg,
+        sessionId: input.params.sessionId,
+        sessionKey: input.params.sessionKey,
+        runId: input.runId,
+        currentChannelProvider: messageToolProvider,
+        ...input.hookChannelFields,
+      },
+    }),
+    webSearchPlan,
+  };
 }
 
 async function forkCodexSideThread(
