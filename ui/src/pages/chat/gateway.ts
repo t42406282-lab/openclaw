@@ -8,7 +8,6 @@ import {
 } from "../../lib/session-key.ts";
 import { normalizeLowercaseStringOrEmpty } from "../../lib/string-coerce.ts";
 import { generateUUID } from "../../lib/uuid.ts";
-import { getChatAttachmentDataUrl } from "../../ui/chat/attachment-payload-store.ts";
 import {
   isAssistantHeartbeatAckForDisplay,
   stripHeartbeatTokenForDisplay,
@@ -33,7 +32,6 @@ import {
   prunePersistedToolStreamMessages,
   visibleCurrentAssistantStreamTail,
 } from "../../ui/chat/stream-reconciliation.ts";
-import { buildUserChatMessageContentBlocks } from "../../ui/chat/user-message-content.ts";
 import { formatConnectError } from "../../ui/connect-error.ts";
 import {
   controlUiNowMs,
@@ -56,7 +54,9 @@ import type {
   GatewaySessionsDefaults,
   ModelCatalogEntry,
 } from "../../ui/types.ts";
+import { getChatAttachmentDataUrl } from "./attachment-payload-store.ts";
 import type { ChatAttachment } from "./types.ts";
+import { buildUserChatMessageContentBlocks } from "./user-message-content.ts";
 
 export { isGatewayMethodAdvertised } from "../../ui/gateway-methods.ts";
 
