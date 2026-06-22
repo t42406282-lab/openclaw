@@ -20,8 +20,8 @@ import markdownItTaskLists from "markdown-it-task-lists";
 import { stripUnsupportedCitationControlMarkers } from "../../../src/shared/text/citation-control-markers.js";
 import { inferBasePathFromPathname, normalizeBasePath, routeIdFromPath } from "../app-routes.ts";
 import { i18n, t } from "../i18n/index.ts";
-import { truncateText } from "./format.ts";
-import { normalizeLowercaseStringOrEmpty } from "./string-coerce.ts";
+import { truncateText } from "../lib/format.ts";
+import { normalizeLowercaseStringOrEmpty } from "../lib/string-coerce.ts";
 
 const allowedTags = [
   "a",

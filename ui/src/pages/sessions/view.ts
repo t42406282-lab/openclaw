@@ -2,16 +2,16 @@
 import { html, nothing } from "lit";
 import { pathForRoute } from "../../app-routes.ts";
 import { t } from "../../i18n/index.ts";
-import { formatRelativeTimestamp, parseSessionKeyParts } from "../../ui/format.ts";
+import { formatRelativeTimestamp, parseSessionKeyParts } from "../../lib/format.ts";
+import {
+  normalizeLowercaseStringOrEmpty,
+  normalizeOptionalString,
+} from "../../lib/string-coerce.ts";
 import { icons } from "../../ui/icons.ts";
 import { formatSessionTokens } from "../../ui/presenter.ts";
 import { formatGoalDetail, formatGoalSummary } from "../../ui/session-goal.ts";
 import { sessionModelMatchesDefaults } from "../../ui/session-model-defaults.ts";
 import { isSessionRunActive } from "../../ui/session-run-state.ts";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../../ui/string-coerce.ts";
 import {
   formatInheritedThinkingLabel,
   formatThinkingOverrideLabel,
