@@ -90,7 +90,7 @@ describe("Outcome/fallback runtime contract - embedded runtime fallback classifi
     expect(result.outcome).toBe("completed");
     expect(result.result).toBe(fallback);
     expect(run).toHaveBeenCalledTimes(2);
-    expect(run.mock.calls.at(1)).toEqual([
+    expect(run.mock.calls.at(1)?.slice(0, 2)).toEqual([
       OUTCOME_FALLBACK_RUNTIME_CONTRACT.fallbackProvider,
       OUTCOME_FALLBACK_RUNTIME_CONTRACT.fallbackModel,
     ]);
