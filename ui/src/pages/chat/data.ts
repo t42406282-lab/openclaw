@@ -15,8 +15,6 @@ import {
   normalizeOptionalString,
 } from "../../lib/string-coerce.ts";
 import { generateUUID } from "../../lib/uuid.ts";
-// Control UI module implements app chat behavior.
-import { setLastActiveSessionKey } from "../../ui/app-last-active-session.ts";
 import { resetToolStream } from "../../ui/app-tool-stream.ts";
 import { executeSlashCommand } from "../../ui/chat/slash-command-executor.ts";
 import {
@@ -89,6 +87,8 @@ import {
   type ChatInputHistoryKeyResult,
   type ChatInputHistoryState,
 } from "./input-history.ts";
+// Control UI module implements app chat behavior.
+import { setLastActiveSessionKey } from "./last-active-session.ts";
 import { reconcileChatRunLifecycle } from "./run-lifecycle.ts";
 import { scheduleChatScroll, resetChatScroll } from "./scroll.ts";
 import { clearChatMessagesFromCache, type ChatMessageCache } from "./session-message-cache.ts";
