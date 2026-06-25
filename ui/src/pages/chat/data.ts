@@ -24,6 +24,7 @@ import {
   scopedAgentListParamsForSession,
   scopedAgentParamsForSession,
   visibleSessionMatches,
+  type SessionCapability,
 } from "../../lib/sessions/index.ts";
 import {
   normalizeLowercaseStringOrEmpty,
@@ -40,7 +41,6 @@ import {
   roundedControlUiDurationMs,
   scheduleControlUiAfterPaint,
 } from "../../ui/control-ui-performance.ts";
-import { applyChatHistorySessionInfo, loadSessions, type SessionsState } from "../sessions/data.ts";
 import {
   cloneChatAttachmentsMetadata,
   discardChatAttachmentDataUrls,
@@ -95,6 +95,7 @@ import type {
 } from "./types.ts";
 
 export type ChatHost = ChatInputHistoryState & {
+  sessions: SessionCapability;
   client: GatewayBrowserClient | null;
   chatStream: string | null;
   connected: boolean;
@@ -1012,9 +1013,10 @@ async function sendQueuedChatMessage(
         agentId: prepared.agentId,
       };
       if (ack.status === "ok") {
-        void loadSessions(host as unknown as SessionsState, {
+        void host.sessions.refresh({
           ...createChatSessionsLoadOverrides(host),
           ...scopedAgentListParamsForRefreshTarget(host, refreshTarget),
+          force: true,
         });
       } else {
         host.refreshSessionsAfterChat.set(ack.runId, refreshTarget);
@@ -1810,6 +1812,7 @@ async function dispatchSlashCommand(
   let result: Awaited<ReturnType<typeof executeSlashCommand>>;
   try {
     result = await executeSlashCommand(host.client, targetSessionKey, name, args, {
+      sessions: host.sessions,
       chatModelCatalog: host.chatModelCatalog,
       sessionsResult: host.sessionsResult,
       agentId: scopedAgentIdForSession(host, targetSessionKey),
@@ -1863,9 +1866,8 @@ export async function clearChatHistory(host: ChatHost) {
   }
   const hadActiveRun = hasAbortableSessionRun(host);
   try {
-    await host.client.request("sessions.reset", {
-      key: host.sessionKey,
-      ...scopedAgentParamsForSession(host, host.sessionKey),
+    await host.sessions.reset(host.sessionKey, {
+      agentId: scopedAgentParamsForSession(host, host.sessionKey).agentId,
     });
     host.chatMessages = [];
     clearCachedChatMessagesForSession(host, host.sessionKey);
@@ -1924,11 +1926,28 @@ export async function refreshChat(
   });
   const sessionsRefresh = historyLoad.then((history) => {
     if (history?.sessionInfo) {
-      applyChatHistorySessionInfo(
-        host as unknown as SessionsState,
-        history.sessionInfo,
-        history.defaults,
+      const reconciled = host.sessions.reconcile(history.sessionInfo, history.defaults, {
+        resultAgentId: host.sessionsResultAgentId ?? refreshedAgentId,
+        selectedGlobalAgentId: refreshedAgentId,
+        showArchived: host.sessionsShowArchived,
+      });
+      const sessionsResult = reconciled ? host.sessions.snapshot.result : host.sessionsResult;
+      if (reconciled) {
+        host.sessionsResult = sessionsResult;
+      }
+      const sessionInfo = sessionsResult?.sessions.find(
+        (row) =>
+          areUiSessionKeysEquivalent(row.key, history.sessionInfo?.key) ||
+          row.key === refreshedSessionKey,
       );
+      if (sessionInfo) {
+        const reconciled = reconcileChatRunFromSessionRow(host, sessionInfo, {
+          publishRunStatus: true,
+        });
+        if (!reconciled) {
+          reconcileChatRunFromCurrentSessionRow(host, { publishRunStatus: true });
+        }
+      }
     }
   });
   const startupMetadataRefresh =
