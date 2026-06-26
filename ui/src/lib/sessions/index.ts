@@ -58,10 +58,9 @@ export type SessionListOptions = {
 
 export type SessionCreateParams = {
   agentId?: string;
+  currentSessionKey?: string;
   label?: string;
   model?: string;
-  parentSessionKey?: string;
-  emitCommandHooks?: boolean;
 };
 
 export type SessionPatch = {
@@ -183,7 +182,6 @@ export {
   scopedAgentParamsForSession,
   visibleSessionMatches,
 } from "./navigation.ts";
-export { resolveSessionCreateParams } from "./create.ts";
 export { reconcileSessionHistory } from "./reconcile.ts";
 export type { SessionReconcileOptions } from "./reconcile.ts";
 export type {
@@ -265,7 +263,10 @@ export async function requestSessionList(
 
 export async function requestSessionCreate(
   client: SessionRequestClient,
-  params: SessionCreateParams = {},
+  params: Omit<SessionCreateParams, "currentSessionKey"> & {
+    parentSessionKey?: string;
+    emitCommandHooks?: boolean;
+  } = {},
 ): Promise<string> {
   const result = await client.request<{ key?: unknown }>("sessions.create", params);
   const key = typeof result?.key === "string" ? result.key.trim() : "";
@@ -567,7 +568,11 @@ export function createSessionCapability(gateway: SessionGateway): SessionCapabil
       return null;
     }
     try {
-      const key = await requestSessionCreate(client, params);
+      const { currentSessionKey, ...requestParams } = params;
+      const key = await requestSessionCreate(client, {
+        ...requestParams,
+        ...resolveSessionCreateParams(currentSessionKey, params.agentId),
+      });
       if (disposed || gateway.snapshot.client !== client) {
         return null;
       }
