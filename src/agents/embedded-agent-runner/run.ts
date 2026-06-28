@@ -1732,9 +1732,10 @@ async function runEmbeddedAgentInternal(
       const onUserMessagePersisted: RunEmbeddedAgentParams["onUserMessagePersisted"] = (
         message,
       ) => {
-        const blockedBeforeAgentRun = (
-          message as { __openclaw?: { beforeAgentRunBlocked?: unknown } }
-        ).__openclaw?.beforeAgentRunBlocked;
+        const messageMetadata = message as {
+          __openclaw?: { beforeAgentRunBlocked?: unknown };
+        };
+        const blockedBeforeAgentRun = messageMetadata["__openclaw"]?.beforeAgentRunBlocked;
         const markCurrentUserMessagePersisted = () => {
           if (params.currentMessageId !== undefined) {
             lastPersistedCurrentMessageId = params.currentMessageId;
@@ -1755,10 +1756,10 @@ async function runEmbeddedAgentInternal(
           const canonicalPersistence = recorder
             .persistBlocked(message)
             .then(markWhenPersisted)
-            .catch((error: unknown) => {
+            .catch((persistError: unknown) => {
               log.warn(
                 `failed to persist canonical blocked embedded user turn transcript: ${formatErrorMessage(
-                  error,
+                  persistError,
                 )}`,
               );
             });
@@ -1768,9 +1769,11 @@ async function runEmbeddedAgentInternal(
         const canonicalPersistence = recorder
           .persistApproved()
           .then(markWhenPersisted)
-          .catch((error: unknown) => {
+          .catch((persistError: unknown) => {
             log.warn(
-              `failed to persist canonical embedded user turn transcript: ${formatErrorMessage(error)}`,
+              `failed to persist canonical embedded user turn transcript: ${formatErrorMessage(
+                persistError,
+              )}`,
             );
           });
         recorder.markRuntimePersistencePending(canonicalPersistence);
