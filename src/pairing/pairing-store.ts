@@ -754,12 +754,9 @@ export async function approveChannelPairingCode(params: {
       if (!entry) {
         return null;
       }
-      pruned.splice(idx, 1);
-      await writeJsonFile(filePath, {
-        version: 1,
-        requests: pruned,
-      } satisfies PairingStore);
       const entryAccountId = normalizeOptionalString(entry.meta?.accountId);
+      // Grant first so a fail-closed allowFrom read leaves the pairing code retryable.
+      // The grant is idempotent if persisting request removal then fails.
       await addChannelAllowFromStoreEntry({
         channel: params.channel,
         entry: entry.id,
@@ -767,6 +764,11 @@ export async function approveChannelPairingCode(params: {
         env,
         pairingAdapter: params.pairingAdapter,
       });
+      pruned.splice(idx, 1);
+      await writeJsonFile(filePath, {
+        version: 1,
+        requests: pruned,
+      } satisfies PairingStore);
       return { id: entry.id, entry };
     },
   );

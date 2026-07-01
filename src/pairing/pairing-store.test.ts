@@ -620,7 +620,7 @@ describe("pairing store", () => {
     });
   });
 
-  it("refuses to clobber the allowFrom store when the warm-cached base file is unreadable", async () => {
+  it("preserves allowFrom bytes and the pairing code when the warm-cached store is unreadable", async () => {
     await withTempStateDir(async (stateDir, env) => {
       const allowFromPath = resolveAllowFromFilePath(stateDir, "telegram", "yy");
       await writeAllowFromFixture({
@@ -629,6 +629,7 @@ describe("pairing store", () => {
         accountId: "yy",
         allowFrom: ["1001", "1002"],
       });
+      const created = await createTelegramPairingRequest("yy", env, "1003");
       clearPairingAllowFromReadCacheForTest();
       expect(await readChannelAllowFromStore("telegram", env, "yy")).toEqual(["1001", "1002"]);
       const originalBytes = fsSync.readFileSync(allowFromPath, "utf8");
@@ -649,7 +650,15 @@ describe("pairing store", () => {
           addChannelAllowFromStoreEntry({
             channel: "telegram",
             accountId: "yy",
-            entry: "1003",
+            entry: "1004",
+            env,
+          }),
+        ).rejects.toBe(error);
+        await expect(
+          approveChannelPairingCode({
+            channel: "telegram",
+            code: created.code,
+            accountId: "yy",
             env,
           }),
         ).rejects.toBe(error);
@@ -658,6 +667,9 @@ describe("pairing store", () => {
       }
 
       expect(fsSync.readFileSync(allowFromPath, "utf8")).toBe(originalBytes);
+      await expect(listChannelPairingRequests("telegram", env, "yy")).resolves.toMatchObject([
+        { id: "1003", code: created.code },
+      ]);
     });
   });
 
