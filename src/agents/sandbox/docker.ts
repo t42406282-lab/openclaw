@@ -675,6 +675,9 @@ export async function ensureSandboxContainer(params: {
     image: params.cfg.docker.image,
     configLabelKind: "Image",
     configHash: hashMismatch && running ? (currentHash ?? undefined) : expectedHash,
+    scope: params.cfg.scope,
+    workspaceRoot: params.cfg.workspaceRoot,
+    lifecycleCleanupOnSessionEnd: params.cfg.prune.onSessionEnd,
   });
   return containerName;
 }
