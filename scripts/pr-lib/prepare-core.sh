@@ -605,6 +605,26 @@ prepare_sync_head() {
     return 1
   fi
 
+  if [ "${OPENCLAW_TESTBOX:-}" != "1" ] && [ "$prep_head_sha" != "$lease_sha" ]; then
+    local gates_cover_prep=false
+    if [ -e .local/gates.env ] || [ -L .local/gates.env ]; then
+      require_artifact .local/gates.env
+      # shellcheck disable=SC1091
+      source .local/gates.env
+      if [ "${LAST_VERIFIED_HEAD_SHA:-}" = "$prep_head_sha" ]; then
+        gates_cover_prep=true
+      fi
+    fi
+    if [ "$gates_cover_prep" != "true" ]; then
+      prepare_gates "$pr"
+      checkout_prep_branch "$pr"
+      if [ "$(git rev-parse HEAD)" != "$prep_head_sha" ]; then
+        echo "Prepare gates changed the synced head; restart prepare-sync-head."
+        return 1
+      fi
+    fi
+  fi
+
   if [ "${OPENCLAW_PR_PUSH_MODE:-graphql}" != "git" ] && ! require_graphql_push_preserves_ancestry "$lease_sha" "$prep_head_sha"; then
     echo "Retry prepare-sync-head with the explicit git/unsigned overrides for this content-changing head."
     return 1
