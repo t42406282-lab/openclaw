@@ -54,6 +54,7 @@ export type ContainerWebSocketMessage = {
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_ATTACHMENT_RESPONSE_MAX_BYTES = 1_048_576;
+const DEFAULT_REST_RESPONSE_MAX_BYTES = 16 * 1024 * 1024;
 const CONTAINER_TEXT_STYLE_MARKERS: Record<string, string> = {
   BOLD: "**",
   ITALIC: "*",
@@ -463,6 +464,14 @@ function parseContainerSendTimestamp(raw: unknown): number | undefined {
   return timestamp;
 }
 
+function normalizeContainerQuoteTimestamp(raw: unknown): number | undefined {
+  return parseStrictNonNegativeInteger(raw) ?? undefined;
+}
+
+function normalizeContainerQuoteText(raw: unknown): string | undefined {
+  return typeof raw === "string" ? raw : undefined;
+}
+
 /**
  * Send message via bbernhard container REST API.
  */
@@ -673,6 +682,10 @@ export async function containerRpcRequest<T = unknown>(
         return { start: Number(start), length: Number(length), style };
       });
 
+      const quoteTimestamp = normalizeContainerQuoteTimestamp(
+        p.quoteTimestamp ?? p["quote-timestamp"],
+      );
+      const quoteAuthor = normalizeContainerQuoteText(p.quoteAuthor ?? p["quote-author"]);
       const result = await containerSendMessage({
         baseUrl: opts.baseUrl,
         account: (p.account as string) ?? "",
@@ -680,10 +693,9 @@ export async function containerRpcRequest<T = unknown>(
         message: (p.message as string) ?? "",
         textStyles,
         attachments: p.attachments as string[] | undefined,
-        quoteTimestamp: p["quote-timestamp"] as number | undefined,
-        quoteAuthor:
-          typeof p["quote-author"] === "string" ? stripUuidPrefix(p["quote-author"]) : undefined,
-        quoteMessage: p["quote-message"] as string | undefined,
+        quoteTimestamp,
+        quoteAuthor: quoteAuthor ? stripUuidPrefix(quoteAuthor) : undefined,
+        quoteMessage: normalizeContainerQuoteText(p.quoteMessage ?? p["quote-message"]),
         timeoutMs: opts.timeoutMs,
       });
       return result as T;
