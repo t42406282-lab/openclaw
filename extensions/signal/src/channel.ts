@@ -21,7 +21,10 @@ import {
   createComputedAccountStatusAdapter,
   createDefaultChannelRuntimeState,
 } from "openclaw/plugin-sdk/status-helpers";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/string-coerce-runtime";
+import {
+  normalizeLowercaseStringOrEmpty,
+  normalizeOptionalString,
+} from "openclaw/plugin-sdk/string-coerce-runtime";
 import { sanitizeAssistantVisibleText } from "openclaw/plugin-sdk/text-chunking";
 import {
   resolveSignalAccount,
@@ -304,7 +307,9 @@ async function registerDeliveredSignalApprovalPayloadForReactions(
     cfg: params.cfg,
     accountId: params.target.accountId ?? undefined,
   });
-  if (!account.config.account) {
+  const targetAuthor = normalizeOptionalString(account.config.account);
+  const targetAuthorUuid = normalizeOptionalString(account.config.accountUuid);
+  if (!targetAuthor && !targetAuthorUuid) {
     return;
   }
   const { registerSignalApprovalReactionTargetForDeliveredPayload } =
@@ -314,7 +319,8 @@ async function registerDeliveredSignalApprovalPayloadForReactions(
     target: { ...params.target, accountId: account.accountId },
     payload: params.payload,
     results: params.results,
-    targetAuthor: account.config.account,
+    targetAuthor,
+    targetAuthorUuid,
   });
 }
 
@@ -325,7 +331,9 @@ async function renderSignalApprovalPayloadForReactions(
     cfg: params.ctx.cfg,
     accountId: params.ctx.accountId ?? undefined,
   });
-  if (!account.config.account) {
+  const targetAuthor = normalizeOptionalString(account.config.account);
+  const targetAuthorUuid = normalizeOptionalString(account.config.accountUuid);
+  if (!targetAuthor && !targetAuthorUuid) {
     return null;
   }
   const { addSignalApprovalReactionHintToStructuredPayload } =
@@ -335,7 +343,8 @@ async function renderSignalApprovalPayloadForReactions(
     accountId: params.ctx.accountId ?? undefined,
     to: params.ctx.to,
     payload: params.payload,
-    targetAuthor: account.config.account,
+    targetAuthor,
+    targetAuthorUuid,
   });
 }
 
