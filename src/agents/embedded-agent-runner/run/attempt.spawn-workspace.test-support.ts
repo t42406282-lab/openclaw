@@ -46,6 +46,11 @@ type BootstrapContext = {
   bootstrapFiles: WorkspaceBootstrapFile[];
   contextFiles: EmbeddedContextFile[];
 };
+type CapturedTrajectoryEvent = {
+  data?: Record<string, unknown>;
+  type: string;
+  workspaceDir?: string;
+};
 
 function normalizeMockProviderId(providerId?: string): string {
   // Provider ids in mocked model routing follow the same lowercase normalization
@@ -101,6 +106,7 @@ type AttemptSpawnWorkspaceHoisted = {
   compactionReserveTokens: number;
   systemPromptTexts: string[];
   embeddedSystemPromptInputs: unknown[];
+  trajectoryEvents: CapturedTrajectoryEvent[];
   sessionManager: SessionManagerMocks;
 };
 
@@ -208,6 +214,7 @@ const hoisted = vi.hoisted((): AttemptSpawnWorkspaceHoisted => {
   const compactionReserveTokens = 0;
   const systemPromptTexts: string[] = [];
   const embeddedSystemPromptInputs: unknown[] = [];
+  const trajectoryEvents: CapturedTrajectoryEvent[] = [];
   const sessionManager = {
     getLeafEntry: vi.fn(() => null),
     branch: vi.fn(),
@@ -254,6 +261,7 @@ const hoisted = vi.hoisted((): AttemptSpawnWorkspaceHoisted => {
     compactionReserveTokens,
     systemPromptTexts,
     embeddedSystemPromptInputs,
+    trajectoryEvents,
     sessionManager,
   };
 });
@@ -312,6 +320,35 @@ vi.mock("../../../trajectory/metadata.js", () => ({
   buildTrajectoryArtifacts: (params: Record<string, unknown>) => params,
   buildTrajectoryRunMetadata: () => ({ source: "test" }),
 }));
+
+vi.mock("../../../trajectory/runtime.js", async () => {
+  const actual = await vi.importActual<typeof import("../../../trajectory/runtime.js")>(
+    "../../../trajectory/runtime.js",
+  );
+  return {
+    ...actual,
+    createTrajectoryRuntimeRecorder: (
+      params: Parameters<typeof actual.createTrajectoryRuntimeRecorder>[0],
+    ) => {
+      const recorder = actual.createTrajectoryRuntimeRecorder(params);
+      return {
+        enabled: true as const,
+        describeFlushState: () => recorder?.describeFlushState(),
+        flush: async () => {
+          await recorder?.flush();
+        },
+        recordEvent: (type: string, data?: Record<string, unknown>) => {
+          hoisted.trajectoryEvents.push({
+            type,
+            ...(data ? { data } : {}),
+            ...(params.workspaceDir ? { workspaceDir: params.workspaceDir } : {}),
+          });
+          recorder?.recordEvent(type, data);
+        },
+      };
+    },
+  };
+});
 
 vi.mock("../../sessions/index.js", () => {
   function AuthStorage() {}
@@ -1035,6 +1072,7 @@ export function resetEmbeddedAttemptHarness(
   hoisted.compactionReserveTokens = 0;
   hoisted.systemPromptTexts.length = 0;
   hoisted.embeddedSystemPromptInputs.length = 0;
+  hoisted.trajectoryEvents.length = 0;
   hoisted.sessionManager.getLeafEntry.mockReset().mockReturnValue(null);
   hoisted.sessionManager.branch.mockReset();
   hoisted.sessionManager.resetLeaf.mockReset();
@@ -1240,6 +1278,7 @@ export async function createContextEngineAttemptRunner(params: {
   const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-ctx-engine-workspace-"));
   const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-ctx-engine-agent-"));
   const sessionFile = path.join(workspaceDir, "session.jsonl");
+  const sessionStore = path.join(workspaceDir, "sessions.json");
   params.tempPaths.push(workspaceDir, agentDir);
   await fs.writeFile(sessionFile, "", "utf8");
   const seedMessages: AgentMessage[] =
@@ -1290,7 +1329,7 @@ export async function createContextEngineAttemptRunner(params: {
       sessionFile,
       workspaceDir,
       agentDir,
-      config: {},
+      config: { session: { store: sessionStore } },
       prompt: "hello",
       timeoutMs: 10_000,
       runId: "run-context-engine-forwarding",

@@ -115,10 +115,30 @@ export const mockedContextEngine = {
   })),
 };
 
+function makeMockRuntimePlan(): {
+  auth: {
+    authProfileProviderForAuth: string;
+    providerForAuth: string;
+  };
+  observability: {
+    harnessId: string;
+  };
+} {
+  return {
+    auth: {
+      authProfileProviderForAuth: "anthropic",
+      providerForAuth: "anthropic",
+    },
+    observability: {
+      harnessId: "codex",
+    },
+  };
+}
+
 export const mockedCompactDirect = mockedContextEngine.compact;
 export const mockedResolveContextEngine = vi.fn(async () => mockedContextEngine);
 export const mockedResolveContextEngineOwnerPluginId = vi.fn(() => undefined);
-export const mockedBuildAgentRuntimePlan = vi.fn(() => ({}));
+export const mockedBuildAgentRuntimePlan = vi.fn(makeMockRuntimePlan);
 export const mockedRunPostCompactionSideEffects = vi.fn(async () => {});
 export const mockedSleepWithAbort = vi.fn(
   async (_ms: number, _abortSignal?: AbortSignal) => undefined,
@@ -333,7 +353,7 @@ export function resetRunOverflowCompactionHarnessMocks(): void {
   mockedResolveContextEngine.mockReset();
   mockedResolveContextEngine.mockResolvedValue(mockedContextEngine);
   mockedBuildAgentRuntimePlan.mockReset();
-  mockedBuildAgentRuntimePlan.mockReturnValue({});
+  mockedBuildAgentRuntimePlan.mockImplementation(makeMockRuntimePlan);
   mockedCompactDirect.mockReset();
   mockedCompactDirect.mockResolvedValue({
     ok: false,

@@ -76,11 +76,7 @@ async function readTrajectoryEvents(tempPaths: string[]): Promise<TrajectoryEven
   if (!workspaceDir) {
     throw new Error("missing trajectory workspace path");
   }
-  return (await fs.readFile(path.join(workspaceDir, "embedded-session.jsonl"), "utf8"))
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as TrajectoryEvent);
+  return hoisted.trajectoryEvents.filter((event) => event.workspaceDir === workspaceDir);
 }
 
 function requireRecord(value: unknown, label: string): Record<string, unknown> {
