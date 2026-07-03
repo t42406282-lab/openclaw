@@ -1,6 +1,8 @@
+import {
+  buildInboundUserContextPrefix,
+  buildReplyPromptEnvelopeBase,
+} from "openclaw/plugin-sdk/plugin-test-runtime";
 import { describe, expect, it } from "vitest";
-import { buildInboundUserContextPrefix } from "../../../src/auto-reply/reply/inbound-meta.js";
-import { buildReplyPromptEnvelopeBase } from "../../../src/auto-reply/reply/prompt-prelude.js";
 import { buildTelegramMessageContextForTest } from "./bot-message-context.test-harness.js";
 import type { TelegramPromptContextEntry } from "./bot-message-context.types.js";
 

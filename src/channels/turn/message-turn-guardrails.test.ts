@@ -26,7 +26,7 @@ const migratedMessageTurnFiles = [
   "extensions/zalouser/src/monitor.ts",
 ];
 
-const historyWindowFiles = [
+const directHistoryWindowFiles = [
   "extensions/discord/src/monitor/message-handler.context.ts",
   "extensions/feishu/src/bot.ts",
   "extensions/imessage/src/monitor/inbound-processing.ts",
@@ -37,7 +37,6 @@ const historyWindowFiles = [
   "extensions/qqbot/src/bridge/sdk-adapter.ts",
   "extensions/signal/src/monitor/event-handler.ts",
   "extensions/slack/src/monitor/message-handler/prepare.ts",
-  "extensions/telegram/src/bot-message-context.session.ts",
   "extensions/telegram/src/bot-message-dispatch.ts",
   "extensions/telegram/src/group-history-window.ts",
   "extensions/whatsapp/src/auto-reply/monitor/group-gating.ts",
@@ -148,7 +147,7 @@ describe("message turn migration guardrails", () => {
   });
 
   it("keeps migrated history users on the channel history window facade", () => {
-    for (const file of historyWindowFiles) {
+    for (const file of directHistoryWindowFiles) {
       expect(readRepoFile(file), `${file} should keep using createChannelHistoryWindow`).toContain(
         "createChannelHistoryWindow",
       );

@@ -5,10 +5,12 @@ import {
   createPluginStateSyncKeyedStoreForTests,
   resetPluginStateStoreForTests,
 } from "openclaw/plugin-sdk/plugin-state-test-runtime";
+import {
+  buildInboundUserContextPrefix,
+  buildReplyPromptEnvelopeBase,
+} from "openclaw/plugin-sdk/plugin-test-runtime";
 import { setReplyPayloadMetadata } from "openclaw/plugin-sdk/reply-payload-testing";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildInboundUserContextPrefix } from "../../../src/auto-reply/reply/inbound-meta.js";
-import { buildReplyPromptEnvelopeBase } from "../../../src/auto-reply/reply/prompt-prelude.js";
 import { resolveAutoTopicLabelConfig as resolveAutoTopicLabelConfigRuntime } from "./auto-topic-label-config.js";
 import type { TelegramBotDeps } from "./bot-deps.js";
 import {
