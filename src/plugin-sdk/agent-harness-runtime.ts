@@ -6,7 +6,10 @@ import type {
   CodexBundleMcpThreadConfig,
   LoadCodexBundleMcpThreadConfigParams,
 } from "../agents/codex-mcp-config.types.js";
-import type { EmbeddedRunAttemptResult } from "../agents/embedded-agent-runner/run/types.js";
+import type {
+  EmbeddedRunAttemptParams as CoreEmbeddedRunAttemptParams,
+  EmbeddedRunAttemptResult,
+} from "../agents/embedded-agent-runner/run/types.js";
 import {
   abortAndDrainEmbeddedAgentRun,
   abortEmbeddedAgentRun,
@@ -55,10 +58,8 @@ export type {
   AgentHarnessUserInputPromptOptions,
   AgentHarnessUserInputQuestion,
 } from "../agents/harness/user-input-bridge.js";
-export type {
-  EmbeddedRunAttemptParams,
-  EmbeddedRunAttemptResult,
-} from "../agents/embedded-agent-runner/run/types.js";
+export type EmbeddedRunAttemptParams = Omit<CoreEmbeddedRunAttemptParams, "trajectoryRecorder">;
+export type { EmbeddedRunAttemptResult };
 export type {
   ContextEngine as HarnessContextEngine,
   ContextEngineHostCapability,

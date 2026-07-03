@@ -257,6 +257,7 @@ import {
 } from "./tool-progress-normalization.js";
 import {
   createCodexTrajectoryRecorder,
+  type CodexHostTrajectoryRecorder,
   normalizeCodexTrajectoryError,
   recordCodexTrajectoryCompletion,
   recordCodexTrajectoryContext,
@@ -1406,12 +1407,17 @@ export async function runCodexAppServerAttempt(
     skillsPrompt: skillsCollaborationInstructions ? (params.skillsSnapshot?.prompt ?? "") : "",
     tools: toolBridge.availableSpecs,
   });
+  const hostTrajectoryRecorder = (
+    params as EmbeddedRunAttemptParams & {
+      trajectoryRecorder?: CodexHostTrajectoryRecorder | null;
+    }
+  ).trajectoryRecorder;
   const trajectoryRecorder = createCodexTrajectoryRecorder({
     attempt: params,
     cwd: effectiveCwd,
     developerInstructions: buildRenderedCodexDeveloperInstructions(),
     prompt: codexTurnPromptText,
-    trajectoryRecorder: params.trajectoryRecorder,
+    trajectoryRecorder: hostTrajectoryRecorder,
     trajectorySessionFile: params.trajectorySessionFile,
     tools: toolBridge.availableSpecs,
   });

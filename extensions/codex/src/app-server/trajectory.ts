@@ -30,7 +30,7 @@ type CodexTrajectoryInit = {
   cwd: string;
   developerInstructions?: string;
   prompt?: string;
-  trajectoryRecorder?: EmbeddedRunAttemptParams["trajectoryRecorder"];
+  trajectoryRecorder?: CodexHostTrajectoryRecorder | null;
   trajectorySessionFile?: string;
   tools?: CodexDynamicToolSpec[];
   env?: NodeJS.ProcessEnv;
@@ -57,7 +57,10 @@ type CodexTrajectorySink = {
   write: (event: CodexTrajectoryEvent) => void;
 };
 
-type CodexHostTrajectoryRecorder = NonNullable<EmbeddedRunAttemptParams["trajectoryRecorder"]>;
+export type CodexHostTrajectoryRecorder = {
+  recordEvent: (type: string, data?: Record<string, unknown>) => void;
+  flush: () => Promise<void>;
+};
 
 type CodexTrajectoryEvent = Record<string, unknown> & {
   data?: Record<string, unknown>;

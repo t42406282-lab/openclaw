@@ -2199,9 +2199,8 @@ async function runEmbeddedAgentInternal(
             runtimePlan,
           });
           const hostTrajectoryRecorder =
-            agentHarness.id === "openclaw"
-              ? undefined
-              : createTrajectoryRuntimeRecorder({
+            agentHarness.id === CODEX_HARNESS_ID
+              ? createTrajectoryRuntimeRecorder({
                   cfg: params.config,
                   env: process.env,
                   runId: params.runId,
@@ -2212,7 +2211,8 @@ async function runEmbeddedAgentInternal(
                   modelId: trajectoryAttribution.modelId,
                   modelApi: trajectoryAttribution.modelApi,
                   workspaceDir: resolvedWorkspace,
-                });
+                })
+              : undefined;
           if (!startupStagesEmitted) {
             startupStages.mark(EMBEDDED_RUN_ATTEMPT_DISPATCH_STAGE.runtimePlan);
             startupStages.mark(EMBEDDED_RUN_ATTEMPT_DISPATCH_STAGE.dispatch);
