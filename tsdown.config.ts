@@ -40,6 +40,7 @@ const env = {
 };
 const OUTPUT_SOURCE_MAPS = process.env.OUTPUT_SOURCE_MAPS === "1";
 const RUN_NODE_SKIP_DTS_BUILD = process.env.OPENCLAW_RUN_NODE_SKIP_DTS_BUILD === "1";
+const TSDOWN_DECLARATIONS = RUN_NODE_SKIP_DTS_BUILD ? false : true;
 
 const SUPPRESSED_EVAL_WARNING_PATHS = [
   "@protobufjs/inquire/index.js",
@@ -137,6 +138,7 @@ function nodeBuildConfig(config: UserConfig): UserConfig {
   return {
     ...config,
     env,
+    outExtensions: () => ({ js: ".js", dts: ".d.ts" }),
     fixedExtension: false,
     platform: "node",
     sourcemap: OUTPUT_SOURCE_MAPS,
@@ -671,7 +673,7 @@ function buildUnifiedDistEntries(): Record<string, string> {
 export default defineConfig([
   nodeBuildConfig({
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildAgentCoreDistEntries(),
     outDir: tsdownPackageOutputRoot("agent-core"),
     deps: {
@@ -680,7 +682,7 @@ export default defineConfig([
   }),
   nodeWorkspacePackageBuildConfig({
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildGatewayProtocolDistEntries(),
     outDir: tsdownPackageOutputRoot("gateway-protocol"),
     deps: {
@@ -689,7 +691,7 @@ export default defineConfig([
   }),
   nodeWorkspacePackageBuildConfig({
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildGatewayClientDistEntries(),
     outDir: tsdownPackageOutputRoot("gateway-client"),
     deps: {
@@ -698,7 +700,7 @@ export default defineConfig([
   }),
   nodeWorkspacePackageBuildConfig({
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildNetPolicyDistEntries(),
     outDir: tsdownPackageOutputRoot("net-policy"),
     deps: {
@@ -707,19 +709,19 @@ export default defineConfig([
   }),
   nodeWorkspacePackageBuildConfig({
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildMediaGenerationCoreDistEntries(),
     outDir: tsdownPackageOutputRoot("media-generation-core"),
   }),
   nodeWorkspacePackageBuildConfig({
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildMediaUnderstandingCoreDistEntries(),
     outDir: tsdownPackageOutputRoot("media-understanding-common"),
   }),
   nodeWorkspacePackageBuildConfig({
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildMarkdownCoreDistEntries(),
     outDir: tsdownPackageOutputRoot("markdown-core"),
     deps: {
@@ -728,25 +730,25 @@ export default defineConfig([
   }),
   nodeWorkspacePackageBuildConfig({
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildNormalizationCoreDistEntries(),
     outDir: tsdownPackageOutputRoot("normalization-core"),
   }),
   nodeWorkspacePackageBuildConfig({
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildMediaCoreDistEntries(),
     outDir: tsdownPackageOutputRoot("media-core"),
   }),
   nodeWorkspacePackageBuildConfig({
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildAcpCoreDistEntries(),
     outDir: tsdownPackageOutputRoot("acp-core"),
   }),
   nodeWorkspacePackageBuildConfig({
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildTerminalCoreDistEntries(),
     outDir: tsdownPackageOutputRoot("terminal-core"),
     deps: {
@@ -755,13 +757,13 @@ export default defineConfig([
   }),
   nodeWorkspacePackageBuildConfig({
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildWebContentCoreDistEntries(),
     outDir: "packages/web-content-core/dist",
   }),
   nodeWorkspacePackageBuildConfig({
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildSpeechCoreDistEntries(),
     outDir: tsdownPackageOutputRoot("speech-core"),
     deps: {
@@ -770,7 +772,7 @@ export default defineConfig([
   }),
   nodeWorkspacePackageBuildConfig({
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildLlmCoreDistEntries(),
     outDir: tsdownPackageOutputRoot("llm-core"),
     deps: {
@@ -779,13 +781,13 @@ export default defineConfig([
   }),
   nodeWorkspacePackageBuildConfig({
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildModelCatalogCoreDistEntries(),
     outDir: tsdownPackageOutputRoot("model-catalog-core"),
   }),
   nodeWorkspacePackageBuildConfig({
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildLlmRuntimeDistEntries(),
     outDir: tsdownPackageOutputRoot("llm-runtime"),
     deps: {
@@ -796,7 +798,7 @@ export default defineConfig([
     // Build core entrypoints, plugin-sdk subpaths, bundled plugin entrypoints,
     // and bundled hooks in one graph so runtime singletons are emitted once.
     clean: true,
-    dts: RUN_NODE_SKIP_DTS_BUILD ? false : undefined,
+    dts: TSDOWN_DECLARATIONS,
     entry: buildUnifiedDistEntries(),
     deps: {
       alwaysBundle: shouldAlwaysBundleDependency,
