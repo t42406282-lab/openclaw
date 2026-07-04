@@ -8,7 +8,7 @@ minimumReleaseAge: 2880
 
 minimumReleaseAgeExclude:
   - "@openclaw/crabline@0.1.9"
-  - "@openclaw/fs-safe@0.3.0"
+  - "@openclaw/fs-safe@0.4.1"
   - "@openclaw/proxyline@0.3.3"
   - "acpx"
   - "tokenjuice"
@@ -148,3 +148,6 @@ packageExtensions:
     peerDependenciesMeta:
       sharp:
         optional: true
+
+patchedDependencies:
+  "@openclaw/fs-safe@0.4.1": patches/@openclaw__fs-safe@0.4.1.patch
