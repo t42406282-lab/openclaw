@@ -141,6 +141,7 @@ import {
   UpdateStatusParamsSchema,
   UpdateRunParamsSchema,
 } from "./config.js";
+import { CrestodianChatParamsSchema, CrestodianChatResultSchema } from "./crestodian.js";
 import {
   CronAddParamsSchema,
   CronGetParamsSchema,
@@ -428,6 +429,8 @@ export const ProtocolSchemas = {
   ConfigSchemaLookupParams: ConfigSchemaLookupParamsSchema,
   ConfigSchemaResponse: ConfigSchemaResponseSchema,
   ConfigSchemaLookupResult: ConfigSchemaLookupResultSchema,
+  CrestodianChatParams: CrestodianChatParamsSchema,
+  CrestodianChatResult: CrestodianChatResultSchema,
   WizardStartParams: WizardStartParamsSchema,
   WizardNextParams: WizardNextParamsSchema,
   WizardCancelParams: WizardCancelParamsSchema,
