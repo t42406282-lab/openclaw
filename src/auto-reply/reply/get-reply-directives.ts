@@ -296,10 +296,13 @@ export async function resolveReplyDirectives(params: {
 
   // Prefer CommandBody/RawBody (clean message without structural context) for directive parsing.
   // Keep `Body`/`BodyStripped` as the best-available prompt text (may include context).
-  const { commandText } = resolveDirectiveCommandText({
+  const { commandText: resolvedCommandText, promptSource } = resolveDirectiveCommandText({
     ctx,
     sessionCtx,
   });
+  const textCommandsExplicitlyDenied =
+    ctx.TextCommandsAllowed === false || sessionCtx.TextCommandsAllowed === false;
+  const commandText = textCommandsExplicitlyDenied ? "" : resolvedCommandText;
   const command = buildCommandContext({
     ctx,
     cfg,
@@ -309,11 +312,13 @@ export async function resolveReplyDirectives(params: {
     triggerBodyNormalized,
     commandAuthorized,
   });
-  const allowTextCommands = shouldHandleTextCommands({
-    cfg,
-    surface: command.surface,
-    commandSource: ctx.CommandSource,
-  });
+  const allowTextCommands =
+    !textCommandsExplicitlyDenied &&
+    shouldHandleTextCommands({
+      cfg,
+      surface: command.surface,
+      commandSource: ctx.CommandSource,
+    });
   const commandTextHasSlash = commandText.includes("/");
   const hasConfiguredModelAliases =
     commandTextHasSlash &&
@@ -355,10 +360,12 @@ export async function resolveReplyDirectives(params: {
     (alias) => !reservedCommands.has(normalizeLowercaseStringOrEmpty(alias)),
   );
   const allowStatusDirective = allowTextCommands && command.isAuthorizedSender;
-  let parsedDirectives = parseInlineDirectives(commandText, {
-    modelAliases: configuredAliases,
-    allowStatusDirective,
-  });
+  let parsedDirectives = textCommandsExplicitlyDenied
+    ? clearInlineDirectives(promptSource)
+    : parseInlineDirectives(commandText, {
+        modelAliases: configuredAliases,
+        allowStatusDirective,
+      });
   const hasInlineStatus =
     parsedDirectives.hasStatusDirective && parsedDirectives.cleaned.trim().length > 0;
   if (hasInlineStatus) {
@@ -434,6 +441,9 @@ export async function resolveReplyDirectives(params: {
       };
   const existingBody = sessionCtx.BodyStripped ?? sessionCtx.Body ?? "";
   let cleanedBody = (() => {
+    if (textCommandsExplicitlyDenied) {
+      return existingBody || promptSource;
+    }
     if (!existingBody) {
       if (resetTriggered) {
         return "";
