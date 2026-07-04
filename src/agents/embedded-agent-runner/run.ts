@@ -1799,18 +1799,38 @@ async function runEmbeddedAgentInternal(
       // The embedded agent owns JSONL persistence; this marker lets the outer retry avoid
       // replaying the same inbound channel message after overflow compaction.
       let lastPersistedCurrentMessageId: string | number | undefined;
-      const onUserMessagePersisted: RunEmbeddedAgentParams["onUserMessagePersisted"] = async (
+      let userMessagePersistenceTail = Promise.resolve();
+      let userMessagePersistenceFailed = false;
+      let userMessagePersistenceError: unknown;
+      const onUserMessagePersisted: RunEmbeddedAgentParams["onUserMessagePersisted"] = (
         message,
       ) => {
         if (params.currentMessageId !== undefined) {
           lastPersistedCurrentMessageId = params.currentMessageId;
         }
-        if (isRoomObservation) {
-          await params.userTurnTranscriptRecorder?.persistApproved();
-        } else {
-          params.userTurnTranscriptRecorder?.markRuntimePersisted(message);
+        // SessionManager append hooks are synchronous and intentionally discard callback
+        // promises. Retain the work here so the attempt boundary can await durable approval.
+        userMessagePersistenceTail = userMessagePersistenceTail
+          .then(async () => {
+            if (isRoomObservation) {
+              await params.userTurnTranscriptRecorder?.persistApproved();
+            } else {
+              params.userTurnTranscriptRecorder?.markRuntimePersisted(message);
+            }
+            await params.onUserMessagePersisted?.(message);
+          })
+          .catch((error) => {
+            if (!userMessagePersistenceFailed) {
+              userMessagePersistenceFailed = true;
+              userMessagePersistenceError = error;
+            }
+          });
+      };
+      const waitForUserMessagePersistence = async (): Promise<void> => {
+        await userMessagePersistenceTail;
+        if (userMessagePersistenceFailed) {
+          throw userMessagePersistenceError;
         }
-        params.onUserMessagePersisted?.(message);
       };
       const continueFromCurrentTranscript = () => {
         nextAttemptPromptOverride = MID_TURN_PRECHECK_CONTINUATION_PROMPT;
@@ -2391,6 +2411,7 @@ async function runEmbeddedAgentInternal(
               params.deferTerminalLifecycle ?? params.deferTerminalLifecycleEnd,
             onExecutionPhase: params.onExecutionPhase,
             extraSystemPrompt: params.extraSystemPrompt,
+            roomObservationSystemPrompt: params.roomObservationSystemPrompt,
             sourceReplyDeliveryMode: params.sourceReplyDeliveryMode,
             inputProvenance: params.inputProvenance,
             streamParams: params.streamParams,
@@ -2427,13 +2448,14 @@ async function runEmbeddedAgentInternal(
             .catch((err: unknown): never => {
               throw postCompactionAbortError ?? err;
             })
-            .finally(() => {
+            .finally(async () => {
               clearAttemptTimeoutRelease();
               stopLaneProgressHeartbeat();
               parentAbortSignal?.removeEventListener?.("abort", relayParentAbort);
               if (postCompactionAbortController === attemptAbortController) {
                 postCompactionAbortController = undefined;
               }
+              await waitForUserMessagePersistence();
             });
           if (postCompactionAbortError) {
             throw postCompactionAbortError;

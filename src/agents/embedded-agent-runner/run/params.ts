@@ -291,7 +291,9 @@ export type RunEmbeddedAgentParams = {
   suppressTranscriptOnlyAssistantPersistence?: boolean;
   suppressAssistantErrorPersistence?: boolean;
   userTurnTranscriptRecorder?: UserTurnTranscriptRecorder;
-  onUserMessagePersisted?: (message: Extract<AgentMessage, { role: "user" }>) => void;
+  onUserMessagePersisted?: (
+    message: Extract<AgentMessage, { role: "user" }>,
+  ) => void | Promise<void>;
   onAssistantErrorMessagePersisted?: (
     message: Extract<AgentMessage, { role: "assistant" }>,
   ) => void;
