@@ -200,16 +200,21 @@ change. `channels` lists the available channel plugins.
 
 ## Model-Assisted Planner
 
-Interactive Crestodian is AI-first: exact typed commands run instantly and
-deterministically, and every other message is answered by the custodian
-persona through one bounded model turn (with conversation history and the
-machine overview as context). It first uses the configured OpenClaw model. If
-no configured model is usable yet, it can fall back to local runtimes already
-present on the machine:
+Interactive Crestodian is AI-first. Exact typed commands run instantly and
+deterministically. Every other message runs through the same embedded agent
+loop as regular OpenClaw agents, restricted to one ring-zero `crestodian` tool
+that wraps the typed operations (read actions run freely; mutations require
+your conversational yes and are audited, with automatic config validation fed
+back into the loop). The agent session persists, so the custodian has real
+multi-turn memory. It first uses the configured OpenClaw model; with no usable
+model it can fall back to local runtimes already present on the machine:
 
-- Claude Code CLI: `claude-cli/claude-opus-4-8`
-- Codex app-server harness: `openai/gpt-5.5`
+- Codex app-server harness: `openai/gpt-5.5` (full agent loop)
+- Claude Code CLI: `claude-cli/claude-opus-4-8` (single-turn planner; CLI
+  harnesses cannot enforce the restricted toolset yet)
 
+When the agent loop is unavailable, Crestodian degrades to a bounded
+single-turn planner, and without any model to deterministic typed commands.
 The assistant cannot mutate config directly. It replies in its own voice and
 may propose at most one of Crestodian's typed commands per turn; the normal
 approval and audit rules apply, and Crestodian prints the model it used and the
