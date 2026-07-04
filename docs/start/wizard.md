@@ -7,14 +7,16 @@ title: "Onboarding (CLI)"
 sidebarTitle: "Onboarding: CLI"
 ---
 
-CLI onboarding is the **recommended** terminal setup path for OpenClaw on
-macOS, Linux, or Windows. Windows desktop users can also start with
+This page documents the **classic step wizard**. The default for interactive
+`openclaw onboard` is the [Crestodian conversation](/start/onboarding-overview);
+use the classic wizard when you want to walk every step yourself on macOS,
+Linux, or Windows. Windows desktop users can also start with
 [Windows Hub](/platforms/windows).
 It configures a local Gateway or a remote Gateway connection, plus channels, skills,
 and workspace defaults in one guided flow.
 
 ```bash
-openclaw onboard
+openclaw onboard --classic
 ```
 
 QuickStart is usually only a few minutes, but full onboarding can take longer

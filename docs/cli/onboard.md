@@ -7,7 +7,21 @@ title: "Onboard"
 
 # `openclaw onboard`
 
-Full guided onboarding for local or remote Gateway setup. Use this when you want OpenClaw to walk through model auth, workspace, gateway, channels, skills, and health in one flow.
+Onboarding for local or remote Gateway setup.
+
+By default, interactive `openclaw onboard` opens the [Crestodian](/cli/crestodian)
+conversation: it detects AI access you already have (a Claude Code or Codex
+login, or `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`), proposes a full setup plan
+(model, workspace, quickstart gateway with token auth), and applies it when you
+say **yes**. From the same conversation you can connect channels
+(`connect telegram`) and switch to your agent (`talk to agent`). There are no
+menus; inference is the only decision, and it is usually pre-answered.
+
+The classic multi-step wizard (model auth, workspace, gateway, channels,
+skills, health in one flow) remains available with `--classic`, and runs
+automatically whenever you pass explicit step flags: `--flow`, `--mode remote`,
+`--import-from`, or an `--auth-choice`. Non-interactive automation
+(`--non-interactive` plus the flags documented below) is unchanged.
 
 ## Related guides
 
@@ -33,7 +47,7 @@ Full guided onboarding for local or remote Gateway setup. Use this when you want
 
 ```bash
 openclaw onboard
-openclaw onboard --modern
+openclaw onboard --classic
 openclaw onboard --flow quickstart
 openclaw onboard --flow manual
 openclaw onboard --flow import
@@ -44,14 +58,15 @@ openclaw onboard --mode remote --remote-url wss://gateway-host:18789
 
 `--flow import` uses plugin-owned migration providers such as Hermes. It only runs against a fresh OpenClaw setup; if existing config, credentials, sessions, or workspace memory/identity files are present, reset or choose a fresh setup before importing.
 
-`--modern` starts the Crestodian conversational onboarding preview. Without
-`--modern`, `openclaw onboard` keeps the classic onboarding flow.
+`--modern` is a deprecated alias for `openclaw crestodian`: it opens the
+conversation directly without the first-run proposal. With
+`--modern --non-interactive --json` it prints the Crestodian overview.
 
 In an interactive terminal, bare `openclaw` (no subcommand) routes by config
 state:
 
 - If the active config file is missing or has no authored settings (empty or
-  metadata-only), it starts this classic onboarding flow.
+  metadata-only), it starts the conversational Crestodian onboarding.
 - If the config file exists but fails validation, it starts
   [Crestodian](/cli/crestodian) for repair.
 - If the config file is valid, it opens the normal agent TUI, either locally

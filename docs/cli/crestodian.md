@@ -10,13 +10,15 @@ title: "Crestodian"
 # `openclaw crestodian`
 
 Crestodian is OpenClaw's local setup, repair, and configuration helper. It is
-designed to stay reachable when the normal agent path is broken.
+designed to stay reachable when the normal agent path is broken — and it is the
+default onboarding: on a fresh install, `openclaw onboard` (and bare
+`openclaw`) opens the Crestodian conversation with a first-run proposal, so
+saying **yes** configures everything. The macOS app onboarding drives the same
+conversation through the gateway `crestodian.chat` method.
 
-Running `openclaw` with no command starts classic onboarding first when the
-active config file is missing or has no authored settings (empty or
-metadata-only). After a config file has authored settings, running `openclaw`
-with no command starts Crestodian in an interactive terminal. Running
-`openclaw crestodian` starts the same helper explicitly.
+After a config file has authored settings, running `openclaw` with no command
+opens the agent TUI, and `openclaw crestodian` starts the helper explicitly
+(also when the config is broken).
 
 ## What Crestodian shows
 
@@ -66,6 +68,10 @@ doctor fix
 validate config
 setup
 setup workspace ~/Projects/work model openai/gpt-5.5
+channels
+connect telegram
+config get gateway.auth
+config schema channels.telegram
 config set gateway.port 19001
 config set-ref gateway.auth.token env OPENCLAW_GATEWAY_TOKEN
 gateway status
@@ -114,6 +120,8 @@ Read-only operations can run immediately:
 - check Gateway reachability
 - run doctor without interactive fixes
 - validate config
+- read config values (`config get <path>`, secrets redacted)
+- inspect the config schema (`config schema <path>`)
 - show the audit-log path
 
 Persistent operations require conversational approval in interactive mode unless
@@ -123,12 +131,19 @@ you pass `--yes` for a direct command:
 - run `config set`
 - set supported SecretRef values through `config set-ref`
 - run setup/onboarding bootstrap
+- connect a channel (`connect <channel>`)
 - change the default model
 - start, stop, or restart the Gateway
 - create agents
 - install plugins from ClawHub or npm
 - uninstall plugins
 - run doctor repairs that rewrite config or state
+
+Config writes are schema-validated: invalid values or unknown keys are
+rejected with the exact validation error, and after every applied write
+Crestodian re-validates `openclaw.json` — if the file ends up invalid, the
+issues come back into the conversation and the assistant proposes a corrective
+command (still approval-gated).
 
 Applied writes are recorded in:
 
@@ -138,13 +153,18 @@ Applied writes are recorded in:
 
 Discovery is not audited. Only applied operations and writes are logged.
 
-`openclaw onboard --modern` starts Crestodian as the modern onboarding preview.
-Plain `openclaw onboard` still runs classic onboarding.
+`openclaw onboard --modern` is a deprecated alias for `openclaw crestodian`.
+Plain `openclaw onboard` opens the same conversation with the first-run setup
+proposal; `openclaw onboard --classic` runs the classic step wizard.
 
 ## Setup bootstrap
 
 `setup` is the chat-first onboarding bootstrap. It writes only through typed
-config operations and asks for approval first.
+config operations and asks for approval first. On approval it applies the full
+first-run state: workspace and model in `openclaw.json`, quickstart Gateway
+defaults (loopback, token auth), workspace bootstrap files, and — when run from
+the local CLI — the Gateway background service. Inside the macOS app the app
+manages the Gateway process, so setup only writes config and workspace files.
 
 ```text
 setup
@@ -161,25 +181,40 @@ order and tells you what it chose:
 - Claude Code CLI -> `claude-cli/claude-opus-4-8`
 - Codex -> `openai/gpt-5.5` through the Codex app-server harness
 
+Claude Code and Codex detection is login-aware where credentials are readable
+without keychain prompts: a CLI that is definitively logged out ranks below a
+logged-in one, and the choice is reported as such.
+
 If none are available, setup still writes the default workspace and leaves the
 model unset. Install or log into Codex/Claude Code, or expose
 `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`, then run setup again.
 
+## Connect channels
+
+`connect <channel>` (for example `connect telegram`) walks through that
+channel's setup wizard inside the chat: options come back as numbered lists,
+credentials as plain questions, and `cancel` stops the flow. After approval the
+wizard writes channel config through the same typed operations, records a
+`channels.setup` audit entry, and suggests `restart gateway` to apply the
+change. `channels` lists the available channel plugins.
+
 ## Model-Assisted Planner
 
-Crestodian always starts in deterministic mode. For fuzzy commands that the
-deterministic parser does not understand, local Crestodian can make one bounded
-planner turn through OpenClaw's normal runtime paths. It first uses the
-configured OpenClaw model. If no configured model is usable yet, it can fall
-back to local runtimes already present on the machine:
+Interactive Crestodian is AI-first: exact typed commands run instantly and
+deterministically, and every other message is answered by the custodian
+persona through one bounded model turn (with conversation history and the
+machine overview as context). It first uses the configured OpenClaw model. If
+no configured model is usable yet, it can fall back to local runtimes already
+present on the machine:
 
 - Claude Code CLI: `claude-cli/claude-opus-4-8`
 - Codex app-server harness: `openai/gpt-5.5`
 
-The model-assisted planner cannot mutate config directly. It must translate the
-request into one of Crestodian's typed commands, then the normal approval and
-audit rules apply. Crestodian prints the model it used and the interpreted
-command before it runs anything. Configless fallback planner turns are
+The assistant cannot mutate config directly. It replies in its own voice and
+may propose at most one of Crestodian's typed commands per turn; the normal
+approval and audit rules apply, and Crestodian prints the model it used and the
+interpreted command before anything runs. When no model is usable, Crestodian
+degrades to deterministic typed commands only. Configless fallback planner turns are
 temporary, tool-disabled where the runtime supports it, and use a temporary
 workspace/session.
 
