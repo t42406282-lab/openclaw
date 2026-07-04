@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PassiveRoomObservationAdmissionError } from "../harness/passive-runtime.js";
 import { makeAttemptResult } from "./run.overflow-compaction.fixture.js";
@@ -76,5 +78,40 @@ describe("runEmbeddedAgent passive resolved-model admission", () => {
     expect(mockedRunEmbeddedAttempt).toHaveBeenCalledWith(
       expect.objectContaining({ disableTrajectories: true }),
     );
+  });
+
+  it("uses a private temporary directory and file for the passive transcript", async () => {
+    resolveModelWith({});
+    let transcriptPath: string | undefined;
+    let transcriptDirectory: string | undefined;
+    mockedRunEmbeddedAttempt.mockImplementationOnce(async (params) => {
+      const sessionFile = (params as { sessionFile?: unknown }).sessionFile;
+      if (typeof sessionFile !== "string") {
+        throw new Error("expected a passive session file");
+      }
+      transcriptPath = sessionFile;
+      transcriptDirectory = path.dirname(sessionFile);
+
+      expect(path.basename(transcriptDirectory)).toMatch(/^openclaw-passive-room-/);
+      expect(path.basename(sessionFile)).toBe("session.jsonl");
+      if (process.platform !== "win32") {
+        const [directoryStat, transcriptStat] = await Promise.all([
+          fs.stat(transcriptDirectory),
+          fs.stat(sessionFile),
+        ]);
+        expect(directoryStat.mode & 0o777).toBe(0o700);
+        expect(transcriptStat.mode & 0o777).toBe(0o600);
+      }
+
+      return makeAttemptResult({ promptError: null });
+    });
+
+    await runEmbeddedAgent(passiveRunParams);
+
+    if (!transcriptPath || !transcriptDirectory) {
+      throw new Error("expected passive transcript paths");
+    }
+    await expect(fs.stat(transcriptPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.stat(transcriptDirectory)).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
