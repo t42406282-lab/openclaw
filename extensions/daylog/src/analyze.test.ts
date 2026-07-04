@@ -8,6 +8,7 @@ import {
   revisionWindow,
   sampleFrames,
   selectBatchFrames,
+  validateCardCoverage,
 } from "./analyze.js";
 
 const DAY = "2026-07-03";
@@ -182,6 +183,54 @@ describe("sampleFrames", () => {
     expect(sampled.length).toBeLessThanOrEqual(16);
     expect(sampled[0]).toBe(0);
     expect(sampled[sampled.length - 1]).toBe(99);
+  });
+});
+
+describe("validateCardCoverage", () => {
+  const window = { windowStartMs: dayMs("10:00:00"), windowEndMs: dayMs("11:00:00") };
+  const span = (start: string, end: string) => ({ startMs: dayMs(start), endMs: dayMs(end) });
+
+  it("accepts drafts covering all required spans within tolerance", () => {
+    const result = validateCardCoverage({
+      drafts: [span("10:01:00", "10:30:00"), span("10:30:00", "10:59:00")],
+      requiredSpans: [span("10:00:00", "11:00:00")],
+      ...window,
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects partial outputs that would erase previous cards", () => {
+    // Model returned only the new batch span, dropping the 10:00-10:30 card.
+    const result = validateCardCoverage({
+      drafts: [span("10:30:00", "11:00:00")],
+      requiredSpans: [span("10:00:00", "10:30:00"), span("10:30:00", "11:00:00")],
+      ...window,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain("not covered");
+    }
+  });
+
+  it("rejects drafts outside the revision window", () => {
+    const result = validateCardCoverage({
+      drafts: [span("09:00:00", "11:00:00")],
+      requiredSpans: [span("10:00:00", "11:00:00")],
+      ...window,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain("outside the revision window");
+    }
+  });
+
+  it("tolerates gaps inside required spans up to the tolerance", () => {
+    const result = validateCardCoverage({
+      drafts: [span("10:00:00", "10:29:00"), span("10:30:30", "11:00:00")],
+      requiredSpans: [span("10:00:00", "11:00:00")],
+      ...window,
+    });
+    expect(result.ok).toBe(true);
   });
 });
 

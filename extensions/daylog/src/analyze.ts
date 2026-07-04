@@ -225,6 +225,69 @@ export function parseCardsJson(params: {
   return { ok: true, drafts: sorted };
 }
 
+/** Sub-minute slack so minute-rounded model times do not fail coverage checks. */
+export const COVERAGE_TOLERANCE_MS = 2 * 60 * 1000;
+
+function formatClockForError(ms: number): string {
+  const date = new Date(ms);
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+/**
+ * Validates that drafts cover every required span before the destructive
+ * window replacement. Without this, a syntactically valid but partial model
+ * output would silently erase previously synthesized cards.
+ */
+export function validateCardCoverage(params: {
+  drafts: Array<{ startMs: number; endMs: number }>;
+  requiredSpans: Array<{ startMs: number; endMs: number }>;
+  windowStartMs: number;
+  windowEndMs: number;
+  toleranceMs?: number;
+}): { ok: true } | { ok: false; error: string } {
+  const tolerance = params.toleranceMs ?? COVERAGE_TOLERANCE_MS;
+  const problems: string[] = [];
+  for (const draft of params.drafts) {
+    if (
+      draft.startMs < params.windowStartMs - tolerance ||
+      draft.endMs > params.windowEndMs + tolerance
+    ) {
+      problems.push(
+        `Card ${formatClockForError(draft.startMs)}-${formatClockForError(draft.endMs)} lies outside the revision window ${formatClockForError(params.windowStartMs)}-${formatClockForError(params.windowEndMs)}.`,
+      );
+    }
+  }
+  const covered = params.drafts
+    .map((draft) => ({ startMs: draft.startMs, endMs: draft.endMs }))
+    .toSorted((a, b) => a.startMs - b.startMs);
+  for (const span of params.requiredSpans) {
+    let cursor = span.startMs;
+    for (const interval of covered) {
+      if (interval.endMs <= cursor) {
+        continue;
+      }
+      if (interval.startMs > cursor + tolerance) {
+        break;
+      }
+      cursor = Math.max(cursor, interval.endMs);
+      if (cursor >= span.endMs - tolerance) {
+        break;
+      }
+    }
+    if (cursor < span.endMs - tolerance) {
+      problems.push(
+        `Time ${formatClockForError(Math.max(cursor, span.startMs))}-${formatClockForError(span.endMs)} from the previous timeline is not covered; do not drop existing cards or observed time.`,
+      );
+    }
+  }
+  if (problems.length > 0) {
+    return { ok: false, error: problems.join("\n") };
+  }
+  return { ok: true };
+}
+
 /** Union of the revision window: previous draft cards plus the new batch range. */
 export function revisionWindow(params: {
   batchStartMs: number;

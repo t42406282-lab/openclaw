@@ -16,6 +16,7 @@ import {
   revisionWindow,
   sampleFrames,
   selectBatchFrames,
+  validateCardCoverage,
 } from "./analyze.js";
 import { parseModelRef, type DaylogConfig } from "./config.js";
 import {
@@ -458,17 +459,36 @@ export class DaylogService {
       windowStartMs: window.startMs,
       windowEndMs: window.endMs,
     });
+    // Coverage is validated alongside parsing: a partial-but-valid output must
+    // trigger the repair round-trip instead of erasing previous cards below.
+    const requiredSpans = [
+      ...previousCards.map((card) => ({ startMs: card.startMs, endMs: card.endMs })),
+      { startMs: batch.startMs, endMs: batch.endMs },
+    ];
+    const evaluate = (raw: string) => {
+      const parsed = parseCardsJson({
+        raw,
+        day: batch.day,
+        windowStartMs: window.startMs,
+        windowEndMs: window.endMs,
+      });
+      if (!parsed.ok) {
+        return parsed;
+      }
+      const coverage = validateCardCoverage({
+        drafts: parsed.drafts,
+        requiredSpans,
+        windowStartMs: window.startMs,
+        windowEndMs: window.endMs,
+      });
+      return coverage.ok ? parsed : { ok: false as const, error: coverage.error };
+    };
     const first = await this.deps.runtime.llm.complete({
       messages: [{ role: "user", content: prompt }],
       purpose: "daylog.cards",
       maxTokens: 4000,
     });
-    let parsed = parseCardsJson({
-      raw: first.text,
-      day: batch.day,
-      windowStartMs: window.startMs,
-      windowEndMs: window.endMs,
-    });
+    let parsed = evaluate(first.text);
     if (!parsed.ok) {
       const retry = await this.deps.runtime.llm.complete({
         messages: [
@@ -479,12 +499,7 @@ export class DaylogService {
         purpose: "daylog.cards.repair",
         maxTokens: 4000,
       });
-      parsed = parseCardsJson({
-        raw: retry.text,
-        day: batch.day,
-        windowStartMs: window.startMs,
-        windowEndMs: window.endMs,
-      });
+      parsed = evaluate(retry.text);
     }
     if (!parsed.ok) {
       throw new Error(`card synthesis failed validation: ${parsed.error}`);
