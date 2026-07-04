@@ -136,6 +136,7 @@ export function createLocalGatewayRequestContext(
     registerToolEventRecipient: () => {},
     dedupe: new Map(),
     wizardSessions: new Map(),
+    crestodianSessions: new Map(),
     findRunningWizard: () => null,
     purgeWizardSession: () => {},
     getRuntimeSnapshot: () => ({}) as ChannelRuntimeSnapshot,
