@@ -209,9 +209,10 @@ back into the loop). The agent session persists, so the custodian has real
 multi-turn memory. It first uses the configured OpenClaw model; with no usable
 model it can fall back to local runtimes already present on the machine:
 
-- Codex app-server harness: `openai/gpt-5.5` (full agent loop)
-- Claude Code CLI: `claude-cli/claude-opus-4-8` (single-turn planner; CLI
-  harnesses cannot enforce the restricted toolset yet)
+- Claude Code CLI: `claude-cli/claude-opus-4-8` (agent loop; the ring-zero
+  tool is served over MCP, see the trust model below)
+- Codex app-server harness: `openai/gpt-5.5` (agent loop with an enforced
+  single-tool allow-list)
 
 When the agent loop is unavailable, Crestodian degrades to a bounded
 single-turn planner, and without any model to deterministic typed commands.
@@ -226,6 +227,36 @@ workspace/session.
 Message-channel rescue mode does not use the model-assisted planner. Remote
 rescue stays deterministic so a broken or compromised normal agent path cannot
 be used as a config editor.
+
+### CLI harness trust model
+
+Embedded runtimes and the Codex app-server harness enforce the ring-zero
+restriction directly: the run carries a tool allow-list with only the
+`crestodian` tool. CLI harnesses (Claude Code, Gemini CLI) cannot enforce an
+OpenClaw tool allow-list — the CLI owns its native tools and its own permission
+policy, so OpenClaw fails closed if asked to restrict one. For CLI-harness
+models Crestodian instead:
+
+- injects a dedicated MCP server that serves only the `crestodian` tool and
+  replaces OpenClaw's normal MCP tool surface for the run (for Claude Code the
+  generated config is applied with `--strict-mcp-config`, so no other MCP
+  servers are loaded),
+- keeps every config mutation inside the tool's approval and audit contract —
+  reads run freely, writes require your conversational yes, and every applied
+  write is audited and re-validated,
+- leaves native tools (file reads, shell) to the harness. They follow the same
+  permission posture as normal OpenClaw agent runs on this machine: with
+  OpenClaw's default exec settings Claude Code runs with permissions bypassed,
+  and a restricted `tools.exec` config falls back to the CLI's own permission
+  policy.
+
+Only Crestodian sessions get the crestodian MCP server; normal agent runs
+never see this tool. Treat a Crestodian session on a CLI-harness model like a
+normal local agent run on the same host: the ring-zero tool adds an audited,
+approval-gated path for config repair, but it does not prevent the harness's
+native tools from touching files directly. The Codex app-server fallback and
+API-key models enforce the strict single-tool loop; prefer those when you want
+the hard restriction.
 
 ## Switching to an agent
 

@@ -9,12 +9,14 @@ import { CRESTODIAN_AGENT_SYSTEM_PROMPT } from "./assistant-prompts.js";
 import type { CrestodianOverview } from "./overview.js";
 
 /**
- * Crestodian is a real agent: same embedded loop, session transcript, and tool
- * pipeline as regular agents — restricted to the single ring-zero `crestodian`
- * tool. Turns share one persistent session so the conversation has genuine
- * multi-turn memory. When no loop-capable backend exists (fresh machine with
- * only a CLI harness that cannot enforce a restricted toolset), the caller
- * falls back to the single-turn planner.
+ * Crestodian is a real agent: same loop, session transcript, and tool pipeline
+ * as regular agents — restricted to the single ring-zero `crestodian` tool.
+ * Embedded runtimes enforce that restriction with toolsAllow; CLI harnesses
+ * (claude-cli, gemini-cli) cannot, so they get the tool over a dedicated stdio
+ * MCP server that replaces the normal bundle MCP surface for the run. Turns
+ * share one persistent session so the conversation has genuine multi-turn
+ * memory. When no loop-capable backend exists, the caller falls back to the
+ * single-turn planner.
  */
 export const CRESTODIAN_AGENT_ID = "crestodian";
 
@@ -29,17 +31,29 @@ export type CrestodianAgentTurnRunner = (params: {
 
 export type CrestodianAgentSession = {
   sessionId: string;
+  /** Native CLI session id captured after CLI-harness turns for --resume reuse. */
+  cliSessionId?: string;
 };
 
 export function createCrestodianAgentSession(): CrestodianAgentSession {
   return { sessionId: `crestodian-${randomUUID()}` };
 }
 
+export type CrestodianAgentTurnDeps = {
+  runEmbeddedAgent?: typeof import("../agents/embedded-agent.js").runEmbeddedAgent;
+  runCliAgent?: typeof import("../agents/cli-runner.js").runCliAgent;
+  readConfigFileSnapshot?: typeof import("../config/config.js").readConfigFileSnapshot;
+};
+
 type EmbeddedRunResult = {
   payloads?: Array<{ text?: string }>;
   meta?: {
     finalAssistantVisibleText?: string;
     finalAssistantRawText?: string;
+    agentMeta?: {
+      cliSessionBinding?: { sessionId?: string };
+      clearCliSessionBinding?: boolean;
+    };
   };
 };
 
@@ -62,76 +76,142 @@ async function ensureCrestodianDirs(): Promise<{ workspaceDir: string; sessionFi
   return { workspaceDir, sessionFile: path.join(base, "sessions", "agent.jsonl") };
 }
 
+type CrestodianAgentTurnParams = Parameters<CrestodianAgentTurnRunner>[0];
+
+type RunConfig = import("../config/types.openclaw.js").OpenClawConfig;
+
+type CrestodianAgentTurnPlan =
+  | { runner: "cli"; runConfig: RunConfig; modelLabel: string; provider: string; model: string }
+  | {
+      runner: "embedded";
+      runConfig: RunConfig;
+      modelLabel: string;
+      provider?: string;
+      model?: string;
+      agentHarnessId?: string;
+    };
+
+async function planCrestodianAgentTurn(
+  params: CrestodianAgentTurnParams,
+  deps: CrestodianAgentTurnDeps,
+  workspaceDir: string,
+): Promise<CrestodianAgentTurnPlan | null> {
+  const configuredModel = params.overview.defaultModel;
+  if (configuredModel) {
+    const readSnapshot =
+      deps.readConfigFileSnapshot ?? (await import("../config/config.js")).readConfigFileSnapshot;
+    const snapshot = await readSnapshot();
+    const runConfig = snapshot.runtimeConfig ?? snapshot.config ?? {};
+    const { isCliProvider, resolveDefaultModelForAgent } =
+      await import("../agents/model-selection.js");
+    const ref = resolveDefaultModelForAgent({ cfg: runConfig, agentId: CRESTODIAN_AGENT_ID });
+    if (isCliProvider(ref.provider, runConfig)) {
+      return {
+        runner: "cli",
+        runConfig,
+        modelLabel: configuredModel,
+        provider: ref.provider,
+        model: ref.model,
+      };
+    }
+    return { runner: "embedded", runConfig, modelLabel: configuredModel };
+  }
+  // No configured model: fall back to the first locally detected runtime, in
+  // the same order setup would pick one (Claude Code CLI before Codex).
+  const backend = selectCrestodianLocalPlannerBackends(params.overview)[0];
+  if (!backend) {
+    return null;
+  }
+  const base = {
+    runConfig: backend.buildConfig(workspaceDir),
+    modelLabel: backend.label,
+    provider: backend.provider,
+    model: backend.model,
+  };
+  return backend.runner === "cli"
+    ? { runner: "cli", ...base }
+    : { runner: "embedded", agentHarnessId: "codex", ...base };
+}
+
 /**
  * Run one Crestodian turn through the embedded agent loop. Returns null when
  * no loop-capable backend is available or the run fails, so the caller can
  * degrade to the planner.
  */
-export const runCrestodianAgentTurn: CrestodianAgentTurnRunner = async (params) => {
-  const { overview } = params;
-  const configuredModel = overview.defaultModel;
-  // CLI-harness models (e.g. claude-cli/*) cannot enforce a restricted
-  // toolset; runEmbeddedAgent rejects toolsAllow for them, and we fall back.
-  const embeddedFallback = configuredModel
-    ? null
-    : (selectCrestodianLocalPlannerBackends(overview).find(
-        (backend) => backend.runner === "embedded",
-      ) ?? null);
-  if (!configuredModel && !embeddedFallback) {
+export async function runCrestodianAgentTurnWithDeps(
+  params: CrestodianAgentTurnParams,
+  deps: CrestodianAgentTurnDeps = {},
+): Promise<{ text: string; modelLabel?: string } | null> {
+  const { workspaceDir, sessionFile } = await ensureCrestodianDirs();
+  const plan = await planCrestodianAgentTurn(params, deps, workspaceDir);
+  if (!plan) {
     return null;
   }
 
-  const { workspaceDir, sessionFile } = await ensureCrestodianDirs();
-  const { runEmbeddedAgent } = await import("../agents/embedded-agent.js");
-  const { readConfigFileSnapshot } = await import("../config/config.js");
-
-  let runConfig: import("../config/types.openclaw.js").OpenClawConfig;
-  let provider: string | undefined;
-  let model: string | undefined;
-  let agentHarnessId: string | undefined;
-  let modelLabel: string;
-  if (configuredModel) {
-    const snapshot = await readConfigFileSnapshot();
-    runConfig = snapshot.runtimeConfig ?? snapshot.config ?? {};
-    modelLabel = configuredModel;
-  } else {
-    runConfig = embeddedFallback!.buildConfig(workspaceDir);
-    provider = embeddedFallback!.provider;
-    model = embeddedFallback!.model;
-    agentHarnessId = "codex";
-    modelLabel = embeddedFallback!.label;
-  }
+  const shared = {
+    sessionId: params.session.sessionId,
+    sessionKey: buildAgentMainSessionKey({ agentId: CRESTODIAN_AGENT_ID }),
+    agentId: CRESTODIAN_AGENT_ID,
+    trigger: "manual" as const,
+    sessionFile,
+    workspaceDir,
+    config: plan.runConfig,
+    prompt: params.input,
+    timeoutMs: AGENT_TURN_TIMEOUT_MS,
+    runId: `crestodian-turn-${randomUUID()}`,
+    messageChannel: "crestodian",
+    messageProvider: "crestodian",
+  };
 
   try {
-    const result = (await runEmbeddedAgent({
-      sessionId: params.session.sessionId,
-      sessionKey: buildAgentMainSessionKey({ agentId: CRESTODIAN_AGENT_ID }),
-      agentId: CRESTODIAN_AGENT_ID,
-      trigger: "manual",
-      sessionFile,
-      workspaceDir,
-      config: runConfig,
-      prompt: params.input,
-      extraSystemPrompt: CRESTODIAN_AGENT_SYSTEM_PROMPT,
-      toolsAllow: ["crestodian"],
-      crestodianTool: { surface: params.surface },
-      disableMessageTool: true,
-      timeoutMs: AGENT_TURN_TIMEOUT_MS,
-      runId: `crestodian-turn-${randomUUID()}`,
-      messageChannel: "crestodian",
-      messageProvider: "crestodian",
-      ...(provider ? { provider } : {}),
-      ...(model ? { model } : {}),
-      ...(agentHarnessId ? { agentHarnessId, cleanupBundleMcpOnRunEnd: true } : {}),
-    })) as EmbeddedRunResult;
+    let result: EmbeddedRunResult;
+    if (plan.runner === "cli") {
+      const runCli = deps.runCliAgent ?? (await import("../agents/cli-runner.js")).runCliAgent;
+      result = (await runCli({
+        ...shared,
+        provider: plan.provider,
+        model: plan.model,
+        extraSystemPrompt: CRESTODIAN_AGENT_SYSTEM_PROMPT,
+        extraSystemPromptStatic: CRESTODIAN_AGENT_SYSTEM_PROMPT,
+        crestodianTool: { surface: params.surface },
+        ...(params.session.cliSessionId ? { cliSessionId: params.session.cliSessionId } : {}),
+        cleanupCliLiveSessionOnRunEnd: true,
+      })) as EmbeddedRunResult;
+      // Thread the harness's own session forward so the next turn resumes the
+      // native CLI transcript instead of reseeding from scratch.
+      const agentMeta = result.meta?.agentMeta;
+      if (agentMeta?.clearCliSessionBinding) {
+        delete params.session.cliSessionId;
+      } else if (agentMeta?.cliSessionBinding?.sessionId) {
+        params.session.cliSessionId = agentMeta.cliSessionBinding.sessionId;
+      }
+    } else {
+      const runEmbedded =
+        deps.runEmbeddedAgent ?? (await import("../agents/embedded-agent.js")).runEmbeddedAgent;
+      result = (await runEmbedded({
+        ...shared,
+        extraSystemPrompt: CRESTODIAN_AGENT_SYSTEM_PROMPT,
+        toolsAllow: ["crestodian"],
+        crestodianTool: { surface: params.surface },
+        disableMessageTool: true,
+        ...(plan.provider ? { provider: plan.provider } : {}),
+        ...(plan.model ? { model: plan.model } : {}),
+        ...(plan.agentHarnessId
+          ? { agentHarnessId: plan.agentHarnessId, cleanupBundleMcpOnRunEnd: true }
+          : {}),
+      })) as EmbeddedRunResult;
+    }
     const text = extractRunText(result)?.trim();
     if (!text) {
       return null;
     }
-    return { text, modelLabel };
+    return { text, modelLabel: plan.modelLabel };
   } catch {
-    // Loop unavailable for this backend (CLI harness, auth failure, timeout):
+    // Loop unavailable for this backend (missing CLI, auth failure, timeout):
     // the conversation must keep working, so degrade to the planner path.
     return null;
   }
-};
+}
+
+export const runCrestodianAgentTurn: CrestodianAgentTurnRunner = (params) =>
+  runCrestodianAgentTurnWithDeps(params);
