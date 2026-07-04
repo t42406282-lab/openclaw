@@ -8,8 +8,8 @@ sidebarTitle: "Onboarding: macOS App"
 ---
 
 This doc describes the **current** first-run setup flow. The goal is a
-smooth "day 0" experience: pick where the Gateway runs, connect auth, run the
-wizard, and let the agent bootstrap itself.
+smooth "day 0" experience: pick where the Gateway runs, talk to Crestodian to
+configure everything, and let the agent bootstrap itself.
 For a general overview of onboarding paths, see [Onboarding Overview](/start/onboarding-overview).
 
 <Steps>
@@ -61,32 +61,43 @@ Where does the **Gateway** run?
 
 </Tip>
 </Step>
+<Step title="Talk to Crestodian">
+  For local setups the app opens a chat with
+  [Crestodian](/cli/crestodian), OpenClaw's setup custodian, over the local
+  Gateway. Crestodian reports the AI access it found on the Mac (a Claude Code
+  or Codex login, or API keys) and proposes a complete setup — model,
+  workspace, Gateway defaults. Reply **yes** and it configures everything; no
+  forms or wizard steps.
+</Step>
 <Step title="Permissions">
 <Frame caption="Choose what permissions do you want to give OpenClaw">
 <img src="/assets/macos-onboarding/05-permissions.png" alt="" />
 </Frame>
 
-Onboarding requests TCC permissions needed for:
+Onboarding requests TCC permissions, listed by importance:
 
 - Automation (AppleScript)
-- Notifications
 - Accessibility
 - Screen Recording
+- Notifications
 - Microphone
 - Speech Recognition
 - Camera
 - Location
 
+The full list fits on one page; status updates automatically as you grant
+access.
+
 </Step>
-<Step title="CLI">
-  <Info>This step is optional</Info>
-  The app can install the global `openclaw` CLI via npm, pnpm, or bun.
-  It prefers npm first, then pnpm, then bun if that is the only detected
-  package manager. For the Gateway runtime, Node remains the recommended path.
+<Step title="Gateway runtime install">
+  For local setups the app installs and starts the managed Gateway runtime
+  automatically (private user-space install; no Terminal, admin access, or
+  Homebrew required).
 </Step>
 <Step title="Onboarding Chat (dedicated session)">
   After setup, the app opens a dedicated onboarding chat session so the agent can
-  introduce itself and guide next steps. This keeps first-run guidance separate
+  introduce itself, learn who you are, and help you connect Discord, Slack,
+  Telegram, WhatsApp, or another channel. This keeps first-run guidance separate
   from your normal conversation. See [Bootstrapping](/start/bootstrapping) for
   what happens on the gateway host during the first agent run.
 </Step>

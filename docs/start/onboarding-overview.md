@@ -7,33 +7,40 @@ title: "Onboarding overview"
 sidebarTitle: "Onboarding Overview"
 ---
 
-OpenClaw has two onboarding paths. Both configure auth, the Gateway, and
-optional chat channels — they just differ in how you interact with the setup.
+OpenClaw onboarding is a conversation with [Crestodian](/cli/crestodian),
+OpenClaw's setup custodian. Whether you install from the website one-liner, npm,
+or the macOS app, you land in the same chat: Crestodian detects AI access you
+already have (a Claude Code or Codex login, or API keys), proposes a complete
+setup, and applies it when you say **yes**. Inference is the only required
+decision — workspace, Gateway, and background service use quickstart defaults.
 
-## Which path should I use?
+## Which surface am I in?
 
-|                | CLI onboarding                         | macOS app onboarding      |
-| -------------- | -------------------------------------- | ------------------------- |
-| **Platforms**  | macOS, Linux, Windows (native or WSL2) | macOS only                |
-| **Interface**  | Terminal wizard                        | Guided UI in the app      |
-| **Best for**   | Servers, headless, full control        | Desktop Mac, visual setup |
-| **Automation** | `--non-interactive` for scripts        | Manual only               |
-| **Command**    | `openclaw onboard`                     | Launch the app            |
+|               | CLI onboarding                          | macOS app onboarding       |
+| ------------- | --------------------------------------- | -------------------------- |
+| **Platforms** | macOS, Linux, Windows (native or WSL2)  | macOS only                 |
+| **Interface** | Crestodian chat in the terminal         | Crestodian chat in the app |
+| **Command**   | `openclaw onboard` (or bare `openclaw`) | Launch the app             |
 
-Most users should start with **CLI onboarding** — it works everywhere and gives
-you the most control.
+Automation and full manual control use the classic step wizard:
+`openclaw onboard --classic` or `openclaw onboard --non-interactive ...`.
 
 ## What onboarding configures
 
-Regardless of which path you choose, onboarding sets up:
+Say **yes** to Crestodian's proposal and it sets up:
 
-1. **Model provider and auth** — API key, OAuth, or setup token for your chosen provider
+1. **Model provider** — reuses a detected Claude Code/Codex login or API key
+   (switch anytime: `set default model <provider/model>`)
 2. **Workspace** — directory for agent files, bootstrap templates, and memory
-3. **Gateway** — port, bind address, auth mode
-4. **Channels** (optional) — built-in and bundled chat channels such as
-   iMessage, Discord, Feishu, Google Chat, Mattermost, Microsoft Teams,
-   Telegram, WhatsApp, and more
-5. **Daemon** (optional) — background service so the Gateway starts automatically
+3. **Gateway** — quickstart defaults: loopback bind, token auth
+4. **Daemon** — background service so the Gateway starts automatically (CLI)
+
+Then, still in the conversation:
+
+- **Channels** — say `connect discord`, `connect slack`, `connect telegram`,
+  `connect whatsapp`, … (`channels` lists everything available)
+- **Meet your agent** — say `talk to agent` to hand off to your agent's
+  first-run bootstrap
 
 ## CLI onboarding
 
@@ -43,9 +50,9 @@ Run in any terminal:
 openclaw onboard
 ```
 
-Add `--install-daemon` to also install the background service in one step.
+Bare `openclaw` on a fresh machine opens the same conversation.
 
-Full reference: [Onboarding (CLI)](/start/wizard)
+Classic step wizard: [Onboarding (CLI)](/start/wizard)
 CLI command docs: [`openclaw onboard`](/cli/onboard)
 
 ## macOS app onboarding
