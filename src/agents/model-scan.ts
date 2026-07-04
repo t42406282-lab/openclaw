@@ -1,3 +1,6 @@
+/**
+ * Scans remote provider model catalogs for configured providers.
+ */
 import { normalizeProviderId } from "@openclaw/model-catalog-core/provider-id";
 import {
   asDateTimestampMs,
@@ -13,9 +16,6 @@ import {
 } from "@openclaw/normalization-core/string-normalization";
 import { Type } from "typebox";
 import { formatErrorMessage } from "../infra/errors.js";
-/**
- * Scans remote provider model catalogs for configured providers.
- */
 import { readResponseWithLimit } from "../infra/http-body.js";
 import { getEnvApiKey } from "../llm/env-api-keys.js";
 import type { OpenAICompletionsOptions } from "../llm/providers/openai-completions.js";

@@ -1,7 +1,7 @@
+// Implements docs link/search output for `openclaw docs`.
 import { formatDocsLink } from "../../packages/terminal-core/src/links.js";
 import { isRich, theme } from "../../packages/terminal-core/src/theme.js";
 import { formatCliCommand } from "../cli/command-format.js";
-// Implements docs link/search output for `openclaw docs`.
 import { readResponseWithLimit } from "../infra/http-body.js";
 import type { RuntimeEnv } from "../runtime.js";
 

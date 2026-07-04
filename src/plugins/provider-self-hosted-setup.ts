@@ -1,3 +1,4 @@
+// Builds setup metadata for self-hosted provider plugins.
 import {
   findNormalizedProviderValue,
   normalizeProviderId,
@@ -17,7 +18,6 @@ import {
 } from "../agents/self-hosted-provider-defaults.js";
 import type { ModelDefinitionConfig } from "../config/types.models.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-// Builds setup metadata for self-hosted provider plugins.
 import { readResponseWithLimit } from "../infra/http-body.js";
 import { fetchWithSsrFGuard } from "../infra/net/fetch-guard.js";
 import type { SsrFPolicy } from "../infra/net/ssrf.js";

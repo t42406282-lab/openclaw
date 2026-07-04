@@ -51,11 +51,6 @@ export * from "../media/png-encode.ts";
 export * from "../media/qr-image.ts";
 export * from "../media/qr-terminal.ts";
 export * from "@openclaw/media-core/read-byte-stream-with-limit";
-export {
-  readChunkWithIdleTimeout,
-  readResponseTextSnippet,
-  readResponseWithLimit,
-} from "../infra/http-body.js";
 export * from "../media/store.js";
 export * from "../media/temp-files.js";
 export { resolveChannelMediaMaxBytes } from "../channels/plugins/media-limits.js";
