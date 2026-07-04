@@ -93,6 +93,14 @@ export default definePluginEntry({
         }
       };
 
+    // Adds daylog.snapshot to the default macOS node allowlist; without a
+    // policy the gateway strips plugin commands from pairing surfaces.
+    api.registerNodeInvokePolicy({
+      commands: ["daylog.snapshot"],
+      defaultPlatforms: ["macos"],
+      handle: async (ctx) => await ctx.invokeNode(),
+    });
+
     api.registerService({
       id: "daylog",
       start: (ctx) => {

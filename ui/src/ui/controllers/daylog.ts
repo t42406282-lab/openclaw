@@ -71,6 +71,7 @@ export type DaylogUiState = {
   askAnswer: string | null;
   askLoading: boolean;
   actionPending: boolean;
+  configRequested: boolean;
   pollTimer: ReturnType<typeof globalThis.setInterval> | null;
   requestUpdate: (() => void) | null;
 };
@@ -111,6 +112,7 @@ export function getDaylogState(host: object): DaylogUiState {
       askAnswer: null,
       askLoading: false,
       actionPending: false,
+      configRequested: false,
       pollTimer: null,
       requestUpdate: null,
     };

@@ -2945,6 +2945,7 @@ export function renderApp(state: AppViewState) {
                       enabledByDefault: false,
                     })
                   : null,
+                onEnsureConfig: () => void loadConfig(state),
                 onRequestUpdate: requestHostUpdate,
               }),
             )

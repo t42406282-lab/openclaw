@@ -142,13 +142,11 @@ export class DaylogService {
     }
   }
 
-  private async resolveNode(): Promise<{
-    nodeId: string;
-    displayName?: string;
-    command: string;
-  } | null> {
+  private async resolveNode(): Promise<
+    { node: { nodeId: string; displayName?: string; command: string } } | { reason: string }
+  > {
     if (this.cachedNode) {
-      return this.cachedNode;
+      return { node: this.cachedNode };
     }
     const { nodes } = await this.deps.runtime.nodes.list({ connected: true });
     const captureCommand = (node: { commands?: string[] }) =>
@@ -165,10 +163,19 @@ export class DaylogService {
       : candidates[0];
     const command = picked ? captureCommand(picked) : undefined;
     if (!picked || !command) {
-      return null;
+      const inventory =
+        nodes
+          .map(
+            (node) =>
+              `${node.displayName ?? node.nodeId}(${(node.commands ?? []).join("/") || "no commands"})`,
+          )
+          .join(", ") || "none";
+      return {
+        reason: `no connected node exposes ${CAPTURE_COMMANDS.join(" or ")}; connected: ${inventory}`,
+      };
     }
     this.cachedNode = { nodeId: picked.nodeId, displayName: picked.displayName, command };
-    return this.cachedNode;
+    return { node: this.cachedNode };
   }
 
   private async captureTick(): Promise<void> {
@@ -181,11 +188,15 @@ export class DaylogService {
     }
     this.captureInFlight = true;
     try {
-      const node = await this.resolveNode();
-      if (!node) {
-        this.lastCaptureError = "no connected node exposes screen.snapshot or daylog.snapshot";
+      const resolved = await this.resolveNode();
+      if ("reason" in resolved) {
+        if (this.lastCaptureError !== resolved.reason) {
+          this.deps.logger.warn(`daylog: ${resolved.reason}`);
+        }
+        this.lastCaptureError = resolved.reason;
         return;
       }
+      const node = resolved.node;
       const raw = (await this.deps.runtime.nodes.invoke({
         nodeId: node.nodeId,
         command: node.command,

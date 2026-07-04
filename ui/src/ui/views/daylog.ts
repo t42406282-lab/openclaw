@@ -27,6 +27,8 @@ export type DaylogProps = {
   client: GatewayBrowserClient | null;
   connected: boolean;
   pluginEnabled: boolean | null;
+  /** Requests a config snapshot load; enablement is unknown until it arrives. */
+  onEnsureConfig?: () => void;
   onRequestUpdate?: () => void;
 };
 
@@ -305,6 +307,11 @@ export function renderDaylog(props: DaylogProps) {
   }
 
   if (props.pluginEnabled === null) {
+    if (props.connected && !state.configRequested) {
+      // Enablement comes from the config snapshot, which only loads on demand.
+      state.configRequested = true;
+      props.onEnsureConfig?.();
+    }
     return html`
       <section class="card lazy-view-state lazy-view-state--loading">
         <div class="card-title">${t("lazyView.loadingTitle")}</div>
