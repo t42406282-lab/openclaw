@@ -1261,6 +1261,7 @@ export async function runEmbeddedAttempt(
       : (() => {
           const allTools = createOpenClawCodingTools({
             agentId: sessionAgentId,
+            ...(params.crestodianTool ? { crestodianTool: params.crestodianTool } : {}),
             ...buildEmbeddedAttemptToolRunContext({ ...params, trace: runTrace }),
             messageChannel: params.messageChannel,
             chatType: params.chatType,
