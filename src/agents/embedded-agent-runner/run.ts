@@ -1,7 +1,6 @@
 /**
  * Top-level embedded-agent run orchestration entrypoint.
  */
-import { randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -616,6 +615,35 @@ function resolveInitialEmbeddedRunModel(params: {
 
 const POST_RUN_AUTH_PROFILE_SUCCESS_SLOW_MS = 1_000;
 
+type PrivatePassiveRoomTranscript = {
+  directory: string;
+  sessionFile: string;
+};
+
+async function createPrivatePassiveRoomTranscript(): Promise<PrivatePassiveRoomTranscript> {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-passive-room-"));
+  try {
+    await fs.chmod(directory, 0o700);
+    const sessionFile = path.join(directory, "session.jsonl");
+    const handle = await fs.open(sessionFile, "wx", 0o600);
+    try {
+      await handle.chmod(0o600);
+    } finally {
+      await handle.close();
+    }
+    return { directory, sessionFile };
+  } catch (error) {
+    await fs.rm(directory, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
+}
+
+async function removePrivatePassiveRoomTranscript(directory: string): Promise<void> {
+  await fs.rm(directory, { recursive: true, force: true }).catch((error) => {
+    log.warn(`failed to remove passive room transcript: ${formatErrorMessage(error)}`);
+  });
+}
+
 export function runEmbeddedAgent(
   paramsInput: RunEmbeddedAgentParams,
 ): Promise<EmbeddedAgentRunResult> {
@@ -648,39 +676,38 @@ export function runEmbeddedAgent(
   }
   const lifecycleGeneration =
     paramsInput.lifecycleGeneration ?? captureAgentRunLifecycleGeneration(paramsInput.runId);
-  const passiveSessionFile = isRoomObservation
-    ? path.join(os.tmpdir(), `openclaw-passive-room-${randomBytes(12).toString("hex")}.jsonl`)
-    : undefined;
-  const run = withAgentRunLifecycleGeneration(lifecycleGeneration, () =>
-    runEmbeddedAgentInternal({
-      ...paramsInput,
-      config,
-      lifecycleGeneration,
-      ...(isRoomObservation
-        ? {
-            sessionFile: passiveSessionFile,
-            agentHarnessId: "openclaw",
-            agentHarnessRuntimeOverride: "openclaw",
-            modelFallbacksOverride: [],
-            skillsSnapshot: undefined,
-            images: undefined,
-            imageOrder: undefined,
-            currentInboundAudio: false,
-            currentInboundContext: undefined,
-            extraSystemPrompt: undefined,
-          }
-        : {}),
-    }),
-  );
-  return passiveSessionFile
-    ? run.finally(async () => {
-        await fs.unlink(passiveSessionFile).catch((error: NodeJS.ErrnoException) => {
-          if (error.code !== "ENOENT") {
-            log.warn(`failed to remove passive room transcript: ${formatErrorMessage(error)}`);
-          }
-        });
-      })
-    : run;
+  const startRun = (passiveSessionFile?: string) =>
+    withAgentRunLifecycleGeneration(lifecycleGeneration, () =>
+      runEmbeddedAgentInternal({
+        ...paramsInput,
+        config,
+        lifecycleGeneration,
+        ...(passiveSessionFile
+          ? {
+              sessionFile: passiveSessionFile,
+              agentHarnessId: "openclaw",
+              agentHarnessRuntimeOverride: "openclaw",
+              modelFallbacksOverride: [],
+              skillsSnapshot: undefined,
+              images: undefined,
+              imageOrder: undefined,
+              currentInboundAudio: false,
+              currentInboundContext: undefined,
+              extraSystemPrompt: undefined,
+            }
+          : {}),
+      }),
+    );
+  if (!isRoomObservation) {
+    return startRun();
+  }
+  return createPrivatePassiveRoomTranscript().then(async ({ directory, sessionFile }) => {
+    try {
+      return await startRun(sessionFile);
+    } finally {
+      await removePrivatePassiveRoomTranscript(directory);
+    }
+  });
 }
 
 async function runEmbeddedAgentInternal(
