@@ -69,6 +69,7 @@ export type ReplyOperation = {
    * sibling recovery already in flight, not the proven stale leftover.
    */
   readonly terminalRecovery: boolean;
+  readonly restartRecoverable: boolean;
   readonly phase: ReplyOperationPhase;
   readonly result: ReplyOperationResult | null;
   /** True when this operation has owned the supplied session ID. */
@@ -76,6 +77,8 @@ export type ReplyOperation = {
   setPhase(next: "queued" | "preflight_compacting" | "memory_flushing" | "running"): void;
   /** Mark this operation as an in-flight terminal-session recovery. */
   markTerminalRecovery(): void;
+  /** Exclude this operation from restart markers and durable recovery. */
+  disableRestartRecovery(): void;
   updateSessionId(nextSessionId: string): void;
   attachBackend(handle: ReplyBackendHandle): void;
   detachBackend(handle: ReplyBackendHandle): void;
@@ -112,6 +115,7 @@ export type ReplyRunRegistry = {
     resetTriggered: boolean;
     routeThreadId?: string | number;
     upstreamAbortSignal?: AbortSignal;
+    restartRecoverable?: boolean;
   }): ReplyOperation;
   get(sessionKey: string): ReplyOperation | undefined;
   isActive(sessionKey: string): boolean;
@@ -426,6 +430,7 @@ export function createReplyOperation(params: {
   routeThreadId?: string | number;
   upstreamAbortSignal?: AbortSignal;
   respectFollowupAdmissionBarrier?: boolean;
+  restartRecoverable?: boolean;
 }): ReplyOperation {
   const sessionKey = normalizeOptionalString(params.sessionKey);
   const sessionId = normalizeOptionalString(params.sessionId);
@@ -452,6 +457,7 @@ export function createReplyOperation(params: {
   let stateCleared = false;
   let retainFailureUntilComplete = false;
   let terminalRecovery = false;
+  let restartRecoverable = params.restartRecoverable !== false;
   const upstreamAbortSignal = params.upstreamAbortSignal;
   let upstreamAbortHandler: (() => void) | undefined;
   const detachUpstreamAbort = () => {
@@ -534,6 +540,9 @@ export function createReplyOperation(params: {
     get terminalRecovery() {
       return terminalRecovery;
     },
+    get restartRecoverable() {
+      return restartRecoverable;
+    },
     get phase() {
       return phase;
     },
@@ -552,6 +561,9 @@ export function createReplyOperation(params: {
     },
     markTerminalRecovery() {
       terminalRecovery = true;
+    },
+    disableRestartRecovery() {
+      restartRecoverable = false;
     },
     updateSessionId(nextSessionId) {
       if (result) {
@@ -935,11 +947,15 @@ export function getActiveReplyRunCount(): number {
 }
 
 export function listActiveReplyRunSessionIds(): string[] {
-  return [...replyRunState.activeSessionIdsByKey.values()];
+  return [...replyRunState.activeRunsByKey.values()]
+    .filter((operation) => operation.restartRecoverable)
+    .map((operation) => operation.sessionId);
 }
 
 export function listActiveReplyRunSessionKeys(): string[] {
-  return [...replyRunState.activeSessionIdsByKey.keys()];
+  return [...replyRunState.activeRunsByKey.values()]
+    .filter((operation) => operation.restartRecoverable)
+    .map((operation) => operation.key);
 }
 
 export const testing = {

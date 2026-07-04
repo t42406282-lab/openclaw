@@ -92,6 +92,7 @@ import {
 import { getGlobalHookRunner, getGlobalPluginRegistry } from "../../plugins/hook-runner-global.js";
 import type { PluginHookReplyDispatchEvent } from "../../plugins/hook-types.js";
 import { isAcpSessionKey } from "../../routing/session-key.js";
+import { isRoomObservationInputProvenance } from "../../sessions/input-provenance.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
 import type { SessionWorkAdmissionLease } from "../../sessions/session-lifecycle-admission.js";
 import { createLazyImportLoader } from "../../shared/lazy-promise.js";
@@ -1415,6 +1416,9 @@ export async function dispatchReplyFromConfig(
     | { status: "ready" }
     | { status: "busy" }
     | { status: "aborted" };
+  const restartRecoverable = !(
+    ctx.RequestAuthorized === false || isRoomObservationInputProvenance(ctx.InputProvenance)
+  );
   const ensureDispatchReplyOperation = async (
     phase: "pre_dispatch" | "dispatch",
   ): Promise<DispatchReplyOperationAcquisition> => {
@@ -1491,6 +1495,7 @@ export async function dispatchReplyFromConfig(
       resetTriggered: false,
       routeThreadId,
       upstreamAbortSignal: params.replyOptions?.abortSignal,
+      restartRecoverable,
       waitForActive: !allowActivePreDispatch && !allowSlackRoutedThreadBypass,
       retainLifecycleAdmissionOnActive: allowActivePreDispatch || allowSlackRoutedThreadBypass,
       onLifecycleInterrupt,
@@ -1541,6 +1546,7 @@ export async function dispatchReplyFromConfig(
           resetTriggered: false,
           routeThreadId,
           upstreamAbortSignal: params.replyOptions?.abortSignal,
+          restartRecoverable,
           waitForActive: replyOperationStillActive,
           waitTimeoutMs: visibleReplyRecoveryWaitMs,
         });
@@ -1588,6 +1594,7 @@ export async function dispatchReplyFromConfig(
           resetTriggered: false,
           routeThreadId,
           upstreamAbortSignal: params.replyOptions?.abortSignal,
+          restartRecoverable,
           waitForActive: !allowActivePreDispatch && !allowSlackRoutedThreadBypass,
           retainLifecycleAdmissionOnActive: allowActivePreDispatch || allowSlackRoutedThreadBypass,
           onLifecycleInterrupt,
@@ -2271,7 +2278,12 @@ export async function dispatchReplyFromConfig(
     | "plugin-bound-fallback-missing-plugin"
     | "plugin-bound-fallback-no-handler"
     | undefined;
+  const suppressPassiveMessageHooks =
+    ctx.RequestAuthorized === false || isRoomObservationInputProvenance(ctx.InputProvenance);
   const emitMessageReceivedHooks = () => {
+    if (suppressPassiveMessageHooks) {
+      return;
+    }
     if (
       ctx.SuppressMessageReceivedHooks !== true &&
       hookRunner?.hasHooks("message_received") === true
@@ -2310,7 +2322,7 @@ export async function dispatchReplyFromConfig(
     }
     const fastAbort = await fastAbortResolver({ ctx, cfg });
     if (fastAbort.handled) {
-      if (pluginOwnedBinding) {
+      if (pluginOwnedBinding && !suppressPassiveMessageHooks) {
         touchConversationBindingRecord(pluginOwnedBinding.bindingId);
       }
       emitMessageReceivedHooks();
@@ -2358,7 +2370,7 @@ export async function dispatchReplyFromConfig(
       return finishReplyOperationBusyDispatch({ dedupeDisposition: "release" });
     }
 
-    if (pluginOwnedBinding) {
+    if (pluginOwnedBinding && !suppressPassiveMessageHooks) {
       if (isPreDispatchOperationAborted()) {
         return finishReplyOperationAbortedDispatch();
       }
@@ -2772,7 +2784,7 @@ export async function dispatchReplyFromConfig(
     };
 
     // Run before_dispatch hook — let plugins inspect or handle before model dispatch.
-    if (hookRunner?.hasHooks("before_dispatch")) {
+    if (!suppressPassiveMessageHooks && hookRunner?.hasHooks("before_dispatch")) {
       const beforeDispatchResult = await traceReplyPhase("reply.before_dispatch_hooks", () =>
         runWithDispatchLifecycleAdmission(
           async () =>
@@ -2836,7 +2848,7 @@ export async function dispatchReplyFromConfig(
       }
     }
 
-    if (hookRunner?.hasHooks("reply_dispatch")) {
+    if (!suppressPassiveMessageHooks && hookRunner?.hasHooks("reply_dispatch")) {
       const replyDispatchResult = await traceReplyPhase("reply.reply_dispatch_hooks", () =>
         runWithDispatchLifecycleAdmission(
           async () =>
@@ -2849,6 +2861,7 @@ export async function dispatchReplyFromConfig(
                     runId: params.replyOptions?.runId,
                     sessionKey: acpDispatchSessionKey,
                     toolsAllow: params.replyOptions?.toolsAllow,
+                    sourceBoundMessagePolicy: params.replyOptions?.sourceBoundMessagePolicy,
                     images: params.replyOptions?.images,
                     inboundAudio,
                     sessionTtsAuto,
@@ -3694,7 +3707,7 @@ export async function dispatchReplyFromConfig(
       // Command handling prepared a trailing prompt after ACP in-place reset.
       // Route that tail through ACP now (same turn) instead of embedded dispatch.
       ctx.AcpDispatchTailAfterReset = false;
-      if (hookRunner?.hasHooks("reply_dispatch")) {
+      if (!suppressPassiveMessageHooks && hookRunner?.hasHooks("reply_dispatch")) {
         const tailDispatchResult = await runWithDispatchLifecycleAdmission(
           async () =>
             await runWithDispatchAbortSignal(
@@ -3706,6 +3719,7 @@ export async function dispatchReplyFromConfig(
                     runId: params.replyOptions?.runId,
                     sessionKey: acpDispatchSessionKey,
                     toolsAllow: params.replyOptions?.toolsAllow,
+                    sourceBoundMessagePolicy: params.replyOptions?.sourceBoundMessagePolicy,
                     images: params.replyOptions?.images,
                     inboundAudio,
                     sessionTtsAuto,

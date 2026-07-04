@@ -10,6 +10,7 @@ import {
   channelRouteDedupeKey,
 } from "../../../plugin-sdk/channel-route.js";
 import { defaultRuntime } from "../../../runtime.js";
+import { isRoomObservationInputProvenance } from "../../../sessions/input-provenance.js";
 import { createUserTurnTranscriptRecorder } from "../../../sessions/user-turn-transcript.js";
 import { resolveGlobalMap } from "../../../shared/global-singleton.js";
 import {
@@ -153,8 +154,13 @@ export function resolveFollowupDeliveryContextKey(run: FollowupRun): string {
     provenance?.sourceChannel ?? "",
     provenance?.sourceTool ?? "",
     execution.extraSystemPrompt ?? "",
+    execution.roomObservationSystemPrompt ?? "",
     execution.extraSystemPromptStatic ?? "",
     execution.sourceReplyDeliveryMode ?? "",
+    run.currentInboundAudio === true,
+    JSON.stringify(run.currentInboundContext ?? null),
+    JSON.stringify(run.toolsAllow ?? null),
+    JSON.stringify(run.sourceBoundMessagePolicy ?? null),
     execution.silentReplyPromptMode ?? "",
     execution.enforceFinalTag === true,
     execution.skipProviderRuntimeHints === true,
@@ -230,6 +236,8 @@ type FollowupRuntimeMetadata = Pick<
   | "currentInboundEventKind"
   | "currentInboundAudio"
   | "currentInboundContext"
+  | "toolsAllow"
+  | "sourceBoundMessagePolicy"
   | "abortSignal"
   | "queueAbortSignal"
   | "deliveryCorrelations"
@@ -294,6 +302,7 @@ function collectRuntimeMetadata(
     singletonOwner && hasCurrentTurnRuntimeMetadata(singletonOwner)
       ? singletonOwner
       : items.find(hasCurrentTurnRuntimeMetadata);
+  const policySource = singletonOwner ?? items[0];
   const abortSignal = singletonOwner?.abortSignal ?? combineAbortSignals(candidates);
   const queueAbortSignal = singletonOwner?.queueAbortSignal;
   const deliveryCorrelations = items.flatMap((item) => item.deliveryCorrelations ?? []);
@@ -302,6 +311,8 @@ function collectRuntimeMetadata(
     currentInboundEventKind: currentTurnSource?.currentInboundEventKind,
     currentInboundAudio: currentTurnSource?.currentInboundAudio,
     currentInboundContext: currentTurnSource?.currentInboundContext,
+    toolsAllow: policySource?.toolsAllow,
+    sourceBoundMessagePolicy: policySource?.sourceBoundMessagePolicy,
     abortSignal,
     queueAbortSignal,
     deliveryCorrelations: deliveryCorrelations.length > 0 ? deliveryCorrelations : undefined,
@@ -525,6 +536,14 @@ export function createOverflowSummaryRetrySource(source: FollowupRun): FollowupR
     ...(source.currentInboundEventKind === "room_event"
       ? { currentInboundEventKind: "room_event" }
       : {}),
+    ...(source.currentInboundAudio === true ? { currentInboundAudio: true } : {}),
+    ...(source.currentInboundContext
+      ? { currentInboundContext: source.currentInboundContext }
+      : {}),
+    ...(source.toolsAllow !== undefined ? { toolsAllow: source.toolsAllow } : {}),
+    ...(source.sourceBoundMessagePolicy
+      ? { sourceBoundMessagePolicy: source.sourceBoundMessagePolicy }
+      : {}),
     run: source.run,
   };
 }
@@ -596,7 +615,9 @@ async function runSyntheticOverflowSummary(params: {
         config: params.source.run.config,
       };
     },
-    beforeMessageWrite: runAgentHarnessBeforeMessageWriteHook,
+    beforeMessageWrite: isRoomObservationInputProvenance(params.source.run.inputProvenance)
+      ? undefined
+      : runAgentHarnessBeforeMessageWriteHook,
     errorContext: "followup overflow summary transcript",
   });
   const currentInboundEventKind = resolveOverflowSummaryInboundEventKind(params.sources);
@@ -609,6 +630,14 @@ async function runSyntheticOverflowSummary(params: {
     run: params.source.run,
     enqueuedAt: Date.now(),
     ...resolveOriginRoutingMetadata([params.source]),
+    ...(params.source.currentInboundAudio === true ? { currentInboundAudio: true } : {}),
+    ...(params.source.currentInboundContext
+      ? { currentInboundContext: params.source.currentInboundContext }
+      : {}),
+    ...(params.source.toolsAllow !== undefined ? { toolsAllow: params.source.toolsAllow } : {}),
+    ...(params.source.sourceBoundMessagePolicy
+      ? { sourceBoundMessagePolicy: params.source.sourceBoundMessagePolicy }
+      : {}),
     ...(currentInboundEventKind ? { currentInboundEventKind } : {}),
   });
 }

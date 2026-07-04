@@ -69,6 +69,7 @@ export async function admitReplyTurn(params: {
   waitForActive?: boolean;
   retainLifecycleAdmissionOnActive?: boolean;
   onLifecycleInterrupt?: () => void;
+  restartRecoverable?: boolean;
 }): Promise<ReplyTurnAdmission> {
   let sessionId = params.sessionId;
   let expectedSessionId = params.expectedSessionId;
@@ -169,6 +170,7 @@ export async function admitReplyTurn(params: {
           resetTriggered: params.resetTriggered,
           routeThreadId: params.routeThreadId,
           upstreamAbortSignal: params.upstreamAbortSignal,
+          restartRecoverable: params.restartRecoverable,
           respectFollowupAdmissionBarrier:
             params.kind === "queued_followup" || params.kind === "heartbeat",
         });

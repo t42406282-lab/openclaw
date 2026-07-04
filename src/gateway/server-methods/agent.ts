@@ -114,7 +114,7 @@ import {
 } from "../../routing/session-key.js";
 import { defaultRuntime } from "../../runtime.js";
 import {
-  annotateInterSessionPromptText,
+  annotateInputProvenancePromptText,
   normalizeInputProvenance,
   shouldPreserveUserFacingSessionStateForInputProvenance,
   type InputProvenance,
@@ -1601,7 +1601,7 @@ export const agentHandlers: GatewayRequestHandlers = {
     try {
       let message = (request.message ?? "").trim();
       if (!isRawModelRun) {
-        message = annotateInterSessionPromptText(message, inputProvenance);
+        message = annotateInputProvenancePromptText(message, inputProvenance);
       }
       let images: Array<{ type: "image"; data: string; mimeType: string }> = [];
       let imageOrder: PromptImageOrderEntry[] = [];
@@ -3189,7 +3189,7 @@ export const agentHandlers: GatewayRequestHandlers = {
           }
 
           if (!isRawModelRun) {
-            message = annotateInterSessionPromptText(message, inputProvenance);
+            message = annotateInputProvenancePromptText(message, inputProvenance);
           }
 
           const ingressAgentId =
