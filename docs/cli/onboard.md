@@ -19,9 +19,11 @@ menus; inference is the only decision, and it is usually pre-answered.
 
 The classic multi-step wizard (model auth, workspace, gateway, channels,
 skills, health in one flow) remains available with `--classic`, and runs
-automatically whenever you pass explicit step flags: `--flow`, `--mode remote`,
-`--import-from`, or an `--auth-choice`. Non-interactive automation
-(`--non-interactive` plus the flags documented below) is unchanged.
+automatically whenever you pass any explicit setup flag: `--flow`, `--mode`,
+`--auth-choice`, gateway/remote/tailscale/daemon options, `--skip-*` steps,
+imports, and so on. Existing scripted invocations keep their exact behavior;
+only `--workspace` carries over into the conversation. Non-interactive
+automation (`--non-interactive` plus the flags documented below) is unchanged.
 
 ## Related guides
 
