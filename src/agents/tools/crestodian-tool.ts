@@ -148,7 +148,7 @@ function operationForAction(params: Record<string, unknown>): CrestodianOperatio
         id: requireParam(params, "envVar"),
       };
     default:
-      throw new ToolInputError(`crestodian: unknown action "${String(action)}"`);
+      throw new ToolInputError(`crestodian: unknown action "${action}"`);
   }
 }
 
@@ -195,7 +195,7 @@ export function createCrestodianTool(options: CrestodianToolOptions): AnyAgentTo
         );
       }
       const capture = createCaptureRuntime();
-      let applied = false;
+      let applied: boolean;
       try {
         const result = await executeCrestodianOperation(operation, capture, {
           approved: persistent,
