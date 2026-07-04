@@ -90,3 +90,53 @@ describe("router revalidation", () => {
     expect(active?.module).toBeDefined();
   });
 });
+
+describe("router lifecycle cleanup", () => {
+  it("leaves the active route when the next route fails to load", async () => {
+    const onLeave = vi.fn();
+    const page = definePage({
+      id: "page",
+      path: "/page",
+      component: async () => ({ render: () => undefined }),
+      loader: async () => "page",
+      onLeave,
+    });
+    const failed = definePage({
+      id: "failed",
+      path: "/failed",
+      component: async () => ({ render: () => undefined }),
+      loader: async (): Promise<string> => {
+        throw new Error("load failed");
+      },
+    });
+    const router = createRouter({ routes: [page, failed] });
+
+    await router.start(createHistory(), "", "initial");
+    await expect(
+      router.navigateLocation({ pathname: "/failed", search: "", hash: "" }, "next"),
+    ).rejects.toThrow("load failed");
+
+    expect(onLeave).toHaveBeenCalledOnce();
+    expect(router.getState().matches[0]?.routeId).toBe("failed");
+    expect(router.getState().status).toBe("error");
+  });
+
+  it("leaves the active route when navigation has no matching route", async () => {
+    const onLeave = vi.fn();
+    const page = definePage({
+      id: "page",
+      path: "/page",
+      component: async () => ({ render: () => undefined }),
+      loader: async () => "page",
+      onLeave,
+    });
+    const router = createRouter({ routes: [page] });
+
+    await router.start(createHistory(), "", "initial");
+    await router.navigateLocation({ pathname: "/missing", search: "", hash: "" }, "next");
+
+    expect(onLeave).toHaveBeenCalledOnce();
+    expect(router.getState().matches).toEqual([]);
+    expect(router.getState().status).toBe("notFound");
+  });
+});

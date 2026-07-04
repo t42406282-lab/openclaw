@@ -302,6 +302,19 @@ export function createRouter<
         const failedMatch = matches.getMatch(match.id);
         if (failedMatch) {
           const currentActive = targetPublished ? previous : matches.getActiveMatch();
+          if (!sameRoute) {
+            try {
+              await runHook(currentActive, "onLeave", context, {
+                ...hookOptions,
+                revalidating: false,
+              });
+            } catch {
+              // Preserve the route-load failure while still giving the previous route a cleanup pass.
+            }
+            if (!hookOptions.shouldRun()) {
+              return;
+            }
+          }
           matches.batch(() => {
             if (!targetPublished && !sameMatch && currentActive && canCacheMatch(currentActive)) {
               matches.setCached([...matches.getState().cachedMatches, currentActive]);
@@ -412,13 +425,42 @@ export function createRouter<
     const matched = compiled.routeIdFromPath(normalized.pathname, basePath);
     if (!matched) {
       cancelRun(currentRun);
-      currentRun = null;
+      const controller = new AbortController();
+      const run: NavigationRun = {
+        controller,
+        matchId: `notFound:${normalized.pathname}${normalized.search}${normalized.hash}`,
+        location: normalized,
+      };
+      currentRun = run;
+      lastContext = context;
+      hasLastContext = true;
+      const active = matches.getActiveMatch();
+      let lifecycleError: unknown;
+      try {
+        await runHook(active, "onLeave", context, {
+          signal: controller.signal,
+          shouldRun: () => isCurrentRun(currentRun, run),
+          revalidating: false,
+          location: normalized,
+          deps: "",
+          cause: "navigation",
+        });
+      } catch (error) {
+        lifecycleError = error;
+      }
+      if (!isCurrentRun(currentRun, run)) {
+        return;
+      }
       matches.batch(() => {
         matches.setActive([]);
         matches.setPending([]);
         matches.setLocation(normalized, null);
         matches.setStatus("notFound");
       });
+      currentRun = null;
+      if (lifecycleError !== undefined) {
+        throw lifecycleError;
+      }
       return;
     }
     await navigate(matched, context, { history, revalidate }, normalized);
@@ -527,20 +569,7 @@ export function createRouter<
     },
     navigate,
     navigateLocation(location: RouteLocation, context: TLoadContext): Promise<void> {
-      const normalized = normalizeLocation(location);
-      const matched = compiled.routeIdFromPath(normalized.pathname, basePath);
-      if (!matched) {
-        cancelRun(currentRun);
-        currentRun = null;
-        matches.batch(() => {
-          matches.setActive([]);
-          matches.setPending([]);
-          matches.setLocation(normalized, null);
-          matches.setStatus("notFound");
-        });
-        return Promise.resolve();
-      }
-      return navigate(matched, context, { history: "none" }, normalized);
+      return handleLocation(location, context);
     },
     revalidate(
       context: TLoadContext,
