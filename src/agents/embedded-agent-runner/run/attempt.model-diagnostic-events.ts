@@ -26,6 +26,8 @@ import {
   formatDiagnosticTraceparent,
   type DiagnosticTraceContext,
 } from "../../../infra/diagnostic-trace-context.js";
+import type { AssistantMessage } from "../../../llm/types.js";
+import { isContextOverflow } from "../../../llm/utils/overflow.js";
 import { markDiagnosticRunProgress } from "../../../logging/diagnostic-run-activity.js";
 import { getGlobalHookRunner } from "../../../plugins/hook-runner-global.js";
 import type {
@@ -77,6 +79,10 @@ type ModelCallSizeTimingFields = Pick<
   Extract<DiagnosticEventInput, { type: "model.call.completed" }>,
   "requestPayloadBytes" | "responseStreamBytes" | "timeToFirstByteMs"
 >;
+type ModelCallTerminalFields = Pick<
+  Extract<DiagnosticEventInput, { type: "model.call.completed" }>,
+  "stopReason" | "outputContentBlocks" | "outputToolCalls" | "contextOverflowDetected"
+>;
 type ModelCallPromptStats = NonNullable<
   Extract<DiagnosticEventInput, { type: "model.call.started" }>["promptStats"]
 >;
@@ -90,6 +96,8 @@ type ModelCallObservationState = {
   modelContent?: DiagnosticModelCallContent;
   outputMessages?: unknown[];
   usage?: ModelCallUsage;
+  terminalFields?: ModelCallTerminalFields;
+  contextTokenBudget?: number;
   contentCapture?: DiagnosticModelContentCapturePolicy;
   lastStreamProgressAt?: number;
   terminalEventEmitted?: boolean;
@@ -248,6 +256,35 @@ function observeModelCallUsage(state: ModelCallObservationState, value: unknown)
   }
 }
 
+function observeModelCallTerminalFields(state: ModelCallObservationState, value: unknown): void {
+  if (!isRecord(value)) {
+    return;
+  }
+  try {
+    const stopReason = typeof value.stopReason === "string" ? value.stopReason : undefined;
+    const content = Array.isArray(value.content) ? value.content : undefined;
+    const outputContentBlocks = content?.length;
+    const outputToolCalls = content?.filter(
+      (block) => isRecord(block) && block.type === "toolCall",
+    ).length;
+    const contextOverflowDetected =
+      value.role === "assistant" && state.contextTokenBudget
+        ? isContextOverflow(value as unknown as AssistantMessage, state.contextTokenBudget)
+        : undefined;
+    const fields = {
+      ...(stopReason ? { stopReason } : {}),
+      ...(outputContentBlocks !== undefined ? { outputContentBlocks } : {}),
+      ...(outputToolCalls !== undefined ? { outputToolCalls } : {}),
+      ...(contextOverflowDetected !== undefined ? { contextOverflowDetected } : {}),
+    };
+    if (Object.keys(fields).length > 0) {
+      state.terminalFields = fields;
+    }
+  } catch {
+    // Diagnostics must not interfere with provider stream consumption.
+  }
+}
+
 function observeOutputMessageContent(state: ModelCallObservationState, chunk: unknown): void {
   if (!isRecord(chunk)) {
     return;
@@ -266,6 +303,7 @@ function observeOutputMessageContent(state: ModelCallObservationState, chunk: un
   // model.call.error event and its OTel span already expose.
   if (message !== undefined) {
     observeModelCallUsage(state, message);
+    observeModelCallTerminalFields(state, message);
     if (state.contentCapture?.outputMessages) {
       state.outputMessages = [cloneDiagnosticContentValue(message)];
     }
@@ -279,6 +317,7 @@ function observeResultMessageContent(
 ): void {
   state.timeToFirstByteMs ??= Math.max(0, Date.now() - startedAt);
   observeModelCallUsage(state, result);
+  observeModelCallTerminalFields(state, result);
   if (state.contentCapture?.outputMessages && state.outputMessages === undefined) {
     state.outputMessages = [cloneDiagnosticContentValue(result)];
   }
@@ -544,6 +583,7 @@ function emitModelCallCompleted(
       durationMs,
       ...sizeTimingFields,
       ...modelCallUsageField(state),
+      ...state.terminalFields,
     },
     modelContentPrivateData(modelCallCompletedContent(state)),
   );
@@ -574,6 +614,7 @@ function emitModelCallError(
       ...sizeTimingFields,
       ...fields,
       ...modelCallUsageField(state),
+      ...state.terminalFields,
     },
     modelContentPrivateData(modelCallCompletedContent(state)),
   );
@@ -828,6 +869,7 @@ export function wrapStreamFnWithDiagnosticModelCallEvents(
     const state: ModelCallObservationState = {
       responseStreamBytes: 0,
       modelContent,
+      contextTokenBudget: eventBase.contextTokenBudget,
       contentCapture: ctx.contentCapture,
     };
     const propagatedOptions = withDiagnosticTraceparentHeader(options, trace, state);
