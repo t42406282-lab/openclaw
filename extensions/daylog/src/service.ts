@@ -43,6 +43,26 @@ type SnapshotPayload = {
   error?: string;
 };
 
+/** node.invoke responses wrap the node result in {payload, payloadJSON}. */
+function unwrapInvokePayload(raw: unknown): SnapshotPayload | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const envelope = raw as { payload?: unknown; payloadJSON?: string | null };
+  if (envelope.payload && typeof envelope.payload === "object") {
+    return envelope.payload as SnapshotPayload;
+  }
+  if (typeof envelope.payloadJSON === "string" && envelope.payloadJSON.length > 0) {
+    try {
+      return JSON.parse(envelope.payloadJSON) as SnapshotPayload;
+    } catch {
+      return null;
+    }
+  }
+  // Tolerate transports that already deliver the bare node payload.
+  return "base64" in envelope || "error" in envelope ? (envelope as SnapshotPayload) : null;
+}
+
 /** Capture commands in preference order: app nodes first, headless node hosts second. */
 const CAPTURE_COMMANDS = ["screen.snapshot", "daylog.snapshot"] as const;
 
@@ -197,7 +217,7 @@ export class DaylogService {
         return;
       }
       const node = resolved.node;
-      const raw = (await this.deps.runtime.nodes.invoke({
+      const invoked = await this.deps.runtime.nodes.invoke({
         nodeId: node.nodeId,
         command: node.command,
         params: {
@@ -207,7 +227,8 @@ export class DaylogService {
           format: "jpeg",
         },
         timeoutMs: 30_000,
-      })) as SnapshotPayload | null;
+      });
+      const raw = unwrapInvokePayload(invoked);
       if (raw?.error) {
         throw new Error(raw.error);
       }
