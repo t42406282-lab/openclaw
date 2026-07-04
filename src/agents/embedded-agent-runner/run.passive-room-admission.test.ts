@@ -30,6 +30,7 @@ const passiveRunParams = {
     kind: "room_observation" as const,
     sourceChannel: "slack",
   },
+  roomObservationSystemPrompt: "Only make safe, source-bound room comments.",
 };
 
 function resolveModelWith(overrides: Partial<typeof supportedModel>) {
@@ -76,8 +77,93 @@ describe("runEmbeddedAgent passive resolved-model admission", () => {
 
     expect(mockedRunEmbeddedAttempt).toHaveBeenCalledOnce();
     expect(mockedRunEmbeddedAttempt).toHaveBeenCalledWith(
-      expect.objectContaining({ disableTrajectories: true }),
+      expect.objectContaining({
+        disableTrajectories: true,
+        roomObservationSystemPrompt: passiveRunParams.roomObservationSystemPrompt,
+      }),
     );
+  });
+
+  it("waits for passive transcript approval after the attempt reports persistence", async () => {
+    resolveModelWith({});
+    const events: string[] = [];
+    let releasePersistence: () => void = () => {};
+    const persistenceGate = new Promise<void>((resolve) => {
+      releasePersistence = resolve;
+    });
+    const persistApproved = vi.fn(async () => {
+      events.push("persistence:start");
+      await persistenceGate;
+      events.push("persistence:end");
+      return undefined;
+    });
+    mockedRunEmbeddedAttempt.mockImplementationOnce(async (params) => {
+      const onUserMessagePersisted = (
+        params as {
+          onUserMessagePersisted?: (message: {
+            role: "user";
+            content: string;
+            timestamp: number;
+          }) => void | Promise<void>;
+        }
+      ).onUserMessagePersisted;
+      onUserMessagePersisted?.({ role: "user", content: "observed", timestamp: 1 });
+      events.push("attempt:return");
+      return makeAttemptResult({ promptError: null });
+    });
+
+    let runSettled = false;
+    const run = runEmbeddedAgent({
+      ...passiveRunParams,
+      userTurnTranscriptRecorder: { persistApproved } as never,
+    });
+    void run.then(
+      () => {
+        runSettled = true;
+      },
+      () => {
+        runSettled = true;
+      },
+    );
+
+    await vi.waitFor(() => expect(persistApproved).toHaveBeenCalledOnce());
+    expect(events).toEqual(["attempt:return", "persistence:start"]);
+    expect(runSettled).toBe(false);
+
+    releasePersistence();
+    await run;
+
+    expect(events).toEqual(["attempt:return", "persistence:start", "persistence:end"]);
+    expect(runSettled).toBe(true);
+  });
+
+  it("fails the passive run when transcript approval fails", async () => {
+    resolveModelWith({});
+    const persistenceError = new Error("passive transcript approval failed");
+    const persistApproved = vi.fn(async () => {
+      throw persistenceError;
+    });
+    mockedRunEmbeddedAttempt.mockImplementationOnce(async (params) => {
+      const onUserMessagePersisted = (
+        params as {
+          onUserMessagePersisted?: (message: {
+            role: "user";
+            content: string;
+            timestamp: number;
+          }) => void | Promise<void>;
+        }
+      ).onUserMessagePersisted;
+      onUserMessagePersisted?.({ role: "user", content: "observed", timestamp: 1 });
+      return makeAttemptResult({ promptError: null });
+    });
+
+    await expect(
+      runEmbeddedAgent({
+        ...passiveRunParams,
+        userTurnTranscriptRecorder: { persistApproved } as never,
+      }),
+    ).rejects.toBe(persistenceError);
+    expect(persistApproved).toHaveBeenCalledOnce();
   });
 
   it("uses a private temporary directory and file for the passive transcript", async () => {
