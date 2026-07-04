@@ -126,7 +126,10 @@ describe("handleQaInbound", () => {
 
     const assembled = firstRunAssembledParams(runtime);
     await assembled.replyOptions?.onPartialReply?.({ text: "preview" });
-    await assembled.delivery.deliver({ text: "final answer" }, undefined);
+    const missingDeliveryInfo = undefined as unknown as Parameters<
+      typeof assembled.delivery.deliver
+    >[1];
+    await assembled.delivery.deliver({ text: "final answer" }, missingDeliveryInfo);
 
     expect(sendQaBusMessage).toHaveBeenCalledOnce();
     expect(editQaBusMessage).toHaveBeenCalledWith(
