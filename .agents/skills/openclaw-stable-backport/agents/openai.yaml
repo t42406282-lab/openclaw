@@ -1,4 +1,0 @@
-interface:
-  display_name: "OpenClaw Stable Backport"
-  short_description: "Prepare the latest stable release patch set"
-  default_prompt: "Use $openclaw-stable-backport to discover and prepare the complete security and reliability backport set for the most recently published OpenClaw stable release."
