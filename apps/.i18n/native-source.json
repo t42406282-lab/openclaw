@@ -16451,7 +16451,7 @@
     },
     {
       "kind": "conditional-branch",
-      "line": 166,
+      "line": 167,
       "path": "apps/macos/Sources/OpenClaw/Onboarding.swift",
       "source": "Finish",
       "surface": "apple",
@@ -16459,7 +16459,7 @@
     },
     {
       "kind": "conditional-branch",
-      "line": 166,
+      "line": 167,
       "path": "apps/macos/Sources/OpenClaw/Onboarding.swift",
       "source": "Next",
       "surface": "apple",
@@ -16467,7 +16467,7 @@
     },
     {
       "kind": "ui-call",
-      "line": 101,
+      "line": 104,
       "path": "apps/macos/Sources/OpenClaw/OnboardingCrestodianChat.swift",
       "source": "Crestodian is working…",
       "surface": "apple",
@@ -16475,7 +16475,7 @@
     },
     {
       "kind": "ui-call",
-      "line": 126,
+      "line": 129,
       "path": "apps/macos/Sources/OpenClaw/OnboardingCrestodianChat.swift",
       "source": "Retry",
       "surface": "apple",
@@ -16483,7 +16483,7 @@
     },
     {
       "kind": "ui-call",
-      "line": 133,
+      "line": 136,
       "path": "apps/macos/Sources/OpenClaw/OnboardingCrestodianChat.swift",
       "source": "Reply to Crestodian… (yes sets everything up)",
       "surface": "apple",
@@ -16507,7 +16507,7 @@
     },
     {
       "kind": "ui-call",
-      "line": 101,
+      "line": 102,
       "path": "apps/macos/Sources/OpenClaw/OnboardingView+Layout.swift",
       "source": "Back",
       "surface": "apple",
