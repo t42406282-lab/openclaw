@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { MAX_DATE_TIMESTAMP_MS } from "openclaw/plugin-sdk/number-runtime";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAutoCleanupTempDirTracker } from "../../../test/helpers/temp-dir.js";
 import { createWorkboardSqliteStores } from "./sqlite-store.js";
 import {
@@ -16,7 +16,7 @@ import {
   type WorkboardKeyedStore,
 } from "./store.js";
 
-const tempDirs = useAutoCleanupTempDirTracker();
+const tempDirs = useAutoCleanupTempDirTracker(afterEach);
 
 function createMemoryStore<T = PersistedWorkboardCard>(options?: {
   beforeRegister?: (key: string, value: T) => Promise<void> | void;
