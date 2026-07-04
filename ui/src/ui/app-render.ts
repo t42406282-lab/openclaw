@@ -769,6 +769,7 @@ const lazyAgents = createLazyView(() => import("./views/agents.ts"), notifyLazyV
 const lazyActivity = createLazyView(() => import("./views/activity.ts"), notifyLazyViewChanged);
 const lazyChannels = createLazyView(() => import("./views/channels.ts"), notifyLazyViewChanged);
 const lazyCron = createLazyView(() => import("./views/cron.ts"), notifyLazyViewChanged);
+const lazyDaylog = createLazyView(() => import("./views/daylog.ts"), notifyLazyViewChanged);
 const lazyDebug = createLazyView(() => import("./views/debug.ts"), notifyLazyViewChanged);
 const lazyInstances = createLazyView(() => import("./views/instances.ts"), notifyLazyViewChanged);
 const lazyLogs = createLazyView(() => import("./views/logs.ts"), notifyLazyViewChanged);
@@ -2930,6 +2931,21 @@ export function renderApp(state: AppViewState) {
                   state.activityExpandedIds = next;
                 },
                 onScroll: (event) => state.handleActivityScroll(event),
+              }),
+            )
+          : nothing}
+        ${state.tab === "daylog"
+          ? renderLazyView(lazyDaylog, (m) =>
+              m.renderDaylog({
+                host: state,
+                client: state.client,
+                connected: state.connected,
+                pluginEnabled: state.configSnapshot
+                  ? isPluginEnabledInConfigSnapshot(state.configSnapshot, "daylog", {
+                      enabledByDefault: false,
+                    })
+                  : null,
+                onRequestUpdate: requestHostUpdate,
               }),
             )
           : nothing}

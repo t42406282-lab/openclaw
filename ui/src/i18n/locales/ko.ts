@@ -423,10 +423,12 @@ export const ko: TranslationMap = {
     debug: "디버그",
     logs: "로그",
     dreams: "드리밍",
+    daylog: "Daylog",
   },
   subtitles: {
     agents: "워크스페이스, 도구, 정체성.",
     activity: "브라우저 로컬 도구 활동 요약입니다.",
+    daylog: "Your day as a timeline, built from screen snapshots.",
     overview: "상태, 진입점, 상태 정보.",
     workboard: "에이전트 작업 대기열 및 세션 인계.",
     channels: "채널 및 설정.",
@@ -506,6 +508,65 @@ export const ko: TranslationMap = {
     file: "File: {file}",
     truncated: "Log output truncated; showing latest chunk.",
     empty: "No log entries.",
+  },
+  daylog: {
+    disabledHelpStart: "Daylog is disabled. Enable",
+    enableConfigKey: "plugins.entries.daylog.enabled = true",
+    disabledHelpEnd:
+      ", pair a node with screen access (for example the OpenClaw Mac app), then reload this tab.",
+    duration: {
+      minutes: "{minutes}m",
+      hours: "{hours}h {minutes}m",
+    },
+    nav: {
+      previousDay: "Previous day",
+      nextDay: "Next day",
+      today: "Today",
+    },
+    status: {
+      capturing: "Capturing every {seconds}s",
+      paused: "Capture paused",
+      disabled: "Capture off",
+      nodeHelp: "Node providing screen snapshots.",
+      pending: "{count} frames queued",
+      pendingHelp: "Snapshots waiting for the next analysis batch.",
+      analyzing: "Analyzing…",
+      captureError: "Capture error",
+      batchError: "Analysis error",
+      modelMissing: "No vision model",
+      modelMissingHelp:
+        "Set plugins.entries.daylog.config.visionModel or configure tools.media models.",
+    },
+    actions: {
+      pause: "Pause",
+      resume: "Resume",
+      analyzeNow: "Analyze now",
+    },
+    empty: {
+      title: "Nothing on the timeline yet.",
+      subtitle:
+        "Daylog is collecting snapshots; cards appear after the first analysis batch completes.",
+    },
+    card: {
+      keyframeAlt: "Screen snapshot from this activity",
+      distractions: "Distractions",
+    },
+    stats: {
+      title: "Day at a glance",
+      focus: "{pct}% focus",
+      tracked: "{duration} tracked",
+    },
+    standup: {
+      title: "Daily standup",
+      generate: "Generate",
+      refresh: "Regenerate",
+      empty: "Turn today's timeline into a ready-to-paste standup update.",
+    },
+    ask: {
+      title: "Ask your day",
+      placeholder: "When did I review the gateway PR?",
+      submit: "Ask",
+    },
   },
   workboard: {
     disabledHelpStart: "Workboard가 비활성화되어 있습니다. 활성화하려면",

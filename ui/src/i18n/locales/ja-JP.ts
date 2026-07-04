@@ -427,10 +427,12 @@ export const ja_JP: TranslationMap = {
     debug: "デバッグ",
     logs: "ログ",
     dreams: "Dreaming",
+    daylog: "Daylog",
   },
   subtitles: {
     agents: "ワークスペース、ツール、ID。",
     activity: "ブラウザー内のツールアクティビティ概要。",
+    daylog: "Your day as a timeline, built from screen snapshots.",
     overview: "ステータス、エントリーポイント、健全性。",
     workboard: "エージェントの作業キューとセッションの引き継ぎ。",
     channels: "チャンネルと設定。",
@@ -511,6 +513,65 @@ export const ja_JP: TranslationMap = {
     file: "File: {file}",
     truncated: "Log output truncated; showing latest chunk.",
     empty: "No log entries.",
+  },
+  daylog: {
+    disabledHelpStart: "Daylog is disabled. Enable",
+    enableConfigKey: "plugins.entries.daylog.enabled = true",
+    disabledHelpEnd:
+      ", pair a node with screen access (for example the OpenClaw Mac app), then reload this tab.",
+    duration: {
+      minutes: "{minutes}m",
+      hours: "{hours}h {minutes}m",
+    },
+    nav: {
+      previousDay: "Previous day",
+      nextDay: "Next day",
+      today: "Today",
+    },
+    status: {
+      capturing: "Capturing every {seconds}s",
+      paused: "Capture paused",
+      disabled: "Capture off",
+      nodeHelp: "Node providing screen snapshots.",
+      pending: "{count} frames queued",
+      pendingHelp: "Snapshots waiting for the next analysis batch.",
+      analyzing: "Analyzing…",
+      captureError: "Capture error",
+      batchError: "Analysis error",
+      modelMissing: "No vision model",
+      modelMissingHelp:
+        "Set plugins.entries.daylog.config.visionModel or configure tools.media models.",
+    },
+    actions: {
+      pause: "Pause",
+      resume: "Resume",
+      analyzeNow: "Analyze now",
+    },
+    empty: {
+      title: "Nothing on the timeline yet.",
+      subtitle:
+        "Daylog is collecting snapshots; cards appear after the first analysis batch completes.",
+    },
+    card: {
+      keyframeAlt: "Screen snapshot from this activity",
+      distractions: "Distractions",
+    },
+    stats: {
+      title: "Day at a glance",
+      focus: "{pct}% focus",
+      tracked: "{duration} tracked",
+    },
+    standup: {
+      title: "Daily standup",
+      generate: "Generate",
+      refresh: "Regenerate",
+      empty: "Turn today's timeline into a ready-to-paste standup update.",
+    },
+    ask: {
+      title: "Ask your day",
+      placeholder: "When did I review the gateway PR?",
+      submit: "Ask",
+    },
   },
   workboard: {
     disabledHelpStart: "Workboard は無効になっています。有効にするには",

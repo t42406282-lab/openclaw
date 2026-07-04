@@ -1,0 +1,411 @@
+/* ===========================================
+   Daylog Tab - automatic work journal timeline
+   =========================================== */
+
+.daylog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.daylog__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.daylog__daynav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.daylog__day {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.daylog__chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.daylog__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--muted);
+  background: color-mix(in oklab, var(--panel) 80%, transparent);
+  white-space: nowrap;
+}
+
+.daylog__chip svg {
+  width: 12px;
+  height: 12px;
+}
+
+.daylog__chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.daylog__chip--ok .daylog__chip-dot {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ok) 25%, transparent);
+}
+
+.daylog__chip--warn .daylog__chip-dot {
+  background: var(--warn);
+}
+
+.daylog__chip--busy {
+  color: var(--accent);
+}
+
+.daylog__chip--error {
+  color: var(--danger);
+}
+
+.daylog__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.daylog__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .daylog__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- Timeline ---- */
+
+.daylog__timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.daylog__empty {
+  padding: 40px 20px;
+  text-align: center;
+  border: 1px dashed color-mix(in oklab, var(--muted) 35%, transparent);
+  border-radius: 12px;
+}
+
+.daylog__empty-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.daylog__empty-sub {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.daylog-card {
+  border: 1px solid color-mix(in oklab, var(--muted) 18%, transparent);
+  border-radius: 10px;
+  background: var(--card);
+  overflow: hidden;
+}
+
+.daylog-card__header {
+  display: grid;
+  grid-template-columns: 92px 4px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.daylog-card__header:hover {
+  background: color-mix(in oklab, var(--panel) 60%, transparent);
+}
+
+.daylog-card__time {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.daylog-card__time-sep {
+  opacity: 0.6;
+  padding: 0 2px;
+}
+
+.daylog-card__stripe {
+  width: 4px;
+  height: 100%;
+  min-height: 30px;
+  border-radius: 2px;
+  background: hsl(var(--daylog-hue, 200) 65% 55%);
+}
+
+.daylog-card__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.daylog-card__title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daylog-card__summary {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daylog-card--expanded .daylog-card__summary {
+  white-space: normal;
+}
+
+.daylog-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.daylog-card__category {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: hsl(var(--daylog-hue, 200) 70% 70%);
+  background: hsl(var(--daylog-hue, 200) 60% 50% / 0.15);
+}
+
+.daylog-card__app {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.daylog-card__duration {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.daylog-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 12px 12px 118px;
+}
+
+.daylog-card__keyframe {
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--muted) 20%, transparent);
+}
+
+.daylog-card__keyframe--loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.daylog-card__detail {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.daylog-card__distractions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.daylog-card__distractions-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--warn);
+}
+
+.daylog-card__distraction {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: color-mix(in oklab, var(--warn) 12%, transparent);
+}
+
+@media (max-width: 700px) {
+  .daylog-card__header {
+    grid-template-columns: 4px minmax(0, 1fr);
+  }
+
+  .daylog-card__time,
+  .daylog-card__meta {
+    display: none;
+  }
+
+  .daylog-card__body {
+    padding-left: 12px;
+  }
+}
+
+/* ---- Side panel ---- */
+
+.daylog__side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.daylog-side__card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.daylog-side__card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.daylog-stats__focus-bar {
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--warn) 25%, transparent);
+}
+
+.daylog-stats__focus-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ok);
+}
+
+.daylog-stats__focus-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.daylog-stats__categories {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.daylog-stats__category {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.daylog-stats__category-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daylog-stats__category-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--panel) 85%, transparent);
+  overflow: hidden;
+}
+
+.daylog-stats__category-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: hsl(var(--daylog-hue, 200) 65% 55%);
+}
+
+.daylog-stats__category-time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.daylog-stats__apps {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.daylog-stats__app {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: color-mix(in oklab, var(--panel) 80%, transparent);
+}
+
+.daylog-standup__body {
+  font-size: 13px;
+}
+
+.daylog-ask__form {
+  display: flex;
+  gap: 6px;
+}
+
+.daylog-ask__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.daylog-ask__answer {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--panel) 70%, transparent);
+}
