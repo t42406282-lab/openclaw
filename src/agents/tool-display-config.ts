@@ -265,6 +265,11 @@ export const TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
         },
       },
     },
+    crestodian: {
+      emoji: "🦀",
+      title: "Crestodian",
+      detailKeys: ["action", "path", "model", "spec", "pluginId"],
+    },
     get_goal: {
       emoji: "🎯",
       title: "Get Goal",
