@@ -118,89 +118,70 @@ export default definePluginEntry({
       },
     });
 
-    api.registerGatewayMethod(
-      "daylog.status",
-      handle(() => requireService().status()),
-    );
+    // Unscoped plugin methods are authorized as operator.admin; explicit
+    // scopes keep the tab usable for read/write-scoped Control UI sessions.
+    const registerRead = (method: string, run: (params: unknown) => Promise<unknown> | unknown) =>
+      api.registerGatewayMethod(method, handle(run), { scope: "operator.read" });
+    const registerWrite = (method: string, run: (params: unknown) => Promise<unknown> | unknown) =>
+      api.registerGatewayMethod(method, handle(run), { scope: "operator.write" });
 
-    api.registerGatewayMethod(
-      "daylog.days",
-      handle(() => ({ days: requireService().listDays() })),
-    );
+    registerRead("daylog.status", () => requireService().status());
 
-    api.registerGatewayMethod(
-      "daylog.timeline",
-      handle((params) => {
-        const day = readDayParam(params);
-        const svc = requireService();
-        return { day, cards: svc.cardsForDay(day), stats: svc.dayStats(day) };
-      }),
-    );
+    registerRead("daylog.days", () => ({ days: requireService().listDays() }));
 
-    api.registerGatewayMethod(
-      "daylog.frames",
-      handle((params) => {
-        const startMs = readNumberParam(params, "startMs");
-        const endMs = readNumberParam(params, "endMs");
-        const frames = requireService()
-          .framesInRange(startMs, endMs)
-          .map((frame) => ({ id: frame.id, capturedAtMs: frame.capturedAtMs, idle: frame.idle }));
-        return { frames };
-      }),
-    );
+    registerRead("daylog.timeline", (params) => {
+      const day = readDayParam(params);
+      const svc = requireService();
+      return { day, cards: svc.cardsForDay(day), stats: svc.dayStats(day) };
+    });
 
-    api.registerGatewayMethod(
-      "daylog.frame",
-      handle((params) => {
-        const frameId = readNumberParam(params, "frameId");
-        const frame = requireService().frameById(frameId);
-        if (!frame) {
-          throw new Error(`frame ${frameId} not found`);
-        }
-        return {
-          frameId: frame.id,
-          capturedAtMs: frame.capturedAtMs,
-          width: frame.width,
-          height: frame.height,
-          format: "jpeg",
-          base64: readFileSync(frame.path).toString("base64"),
-        };
-      }),
-    );
+    registerRead("daylog.frames", (params) => {
+      const startMs = readNumberParam(params, "startMs");
+      const endMs = readNumberParam(params, "endMs");
+      const frames = requireService()
+        .framesInRange(startMs, endMs)
+        .map((frame) => ({ id: frame.id, capturedAtMs: frame.capturedAtMs, idle: frame.idle }));
+      return { frames };
+    });
 
-    api.registerGatewayMethod(
-      "daylog.standup",
-      handle((params) => {
-        const refresh = (params as { refresh?: unknown } | undefined)?.refresh === true;
-        return requireService().standup(readDayParam(params), refresh);
-      }),
-    );
+    registerRead("daylog.frame", (params) => {
+      const frameId = readNumberParam(params, "frameId");
+      const frame = requireService().frameById(frameId);
+      if (!frame) {
+        throw new Error(`frame ${frameId} not found`);
+      }
+      return {
+        frameId: frame.id,
+        capturedAtMs: frame.capturedAtMs,
+        width: frame.width,
+        height: frame.height,
+        format: "jpeg",
+        base64: readFileSync(frame.path).toString("base64"),
+      };
+    });
 
-    api.registerGatewayMethod(
-      "daylog.ask",
-      handle(async (params) => {
-        const question = (params as { question?: unknown } | undefined)?.question;
-        if (typeof question !== "string" || question.trim().length === 0) {
-          throw new Error("question is required");
-        }
-        const answer = await requireService().ask(readDayParam(params), question.trim());
-        return { answer };
-      }),
-    );
+    // Standup and ask spend model tokens; capture/analyze mutate runtime state.
+    registerWrite("daylog.standup", (params) => {
+      const refresh = (params as { refresh?: unknown } | undefined)?.refresh === true;
+      return requireService().standup(readDayParam(params), refresh);
+    });
 
-    api.registerGatewayMethod(
-      "daylog.capture.set",
-      handle((params) => {
-        const paused = (params as { paused?: unknown } | undefined)?.paused === true;
-        const svc = requireService();
-        svc.setCapturePaused(paused);
-        return svc.status();
-      }),
-    );
+    registerWrite("daylog.ask", async (params) => {
+      const question = (params as { question?: unknown } | undefined)?.question;
+      if (typeof question !== "string" || question.trim().length === 0) {
+        throw new Error("question is required");
+      }
+      const answer = await requireService().ask(readDayParam(params), question.trim());
+      return { answer };
+    });
 
-    api.registerGatewayMethod(
-      "daylog.analyze.now",
-      handle(() => requireService().analyzeNow()),
-    );
+    registerWrite("daylog.capture.set", (params) => {
+      const paused = (params as { paused?: unknown } | undefined)?.paused === true;
+      const svc = requireService();
+      svc.setCapturePaused(paused);
+      return svc.status();
+    });
+
+    registerWrite("daylog.analyze.now", () => requireService().analyzeNow());
   },
 });
