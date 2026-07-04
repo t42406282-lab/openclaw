@@ -1,6 +1,7 @@
-import { CARD_CATEGORIES } from "./prompts.js";
 // Daylog analysis pipeline: frames -> observations -> revised timeline cards.
 // Pure parsing/validation lives here so tests can cover it without the SDK.
+import { CARD_CATEGORIES } from "./prompts.js";
+import { dayKeyFor } from "./store.js";
 import type { DaylogCard, DaylogCardDraft, DaylogDistraction } from "./types.js";
 
 /** Cards within this window before a batch are treated as a revisable draft. */
@@ -313,6 +314,7 @@ export function selectBatchFrames(params: {
     return null;
   }
   const first = params.frames[0];
+  const firstDay = dayKeyFor(first.capturedAtMs);
   const windowEnd = first.capturedAtMs + params.windowMs;
   const selected: Array<{ id: number; capturedAtMs: number }> = [];
   let previousTs = first.capturedAtMs;
@@ -321,6 +323,11 @@ export function selectBatchFrames(params: {
       break;
     }
     if (selected.length > 0 && frame.capturedAtMs - previousTs > BATCH_MAX_GAP_MS) {
+      break;
+    }
+    // Batches never span local midnight: every downstream clock (observations,
+    // cards, day keys) is parsed against the batch's single day.
+    if (selected.length > 0 && dayKeyFor(frame.capturedAtMs) !== firstDay) {
       break;
     }
     selected.push(frame);

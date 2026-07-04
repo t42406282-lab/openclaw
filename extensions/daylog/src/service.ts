@@ -279,7 +279,7 @@ export class DaylogService {
   // ── Analysis ───────────────────────────────────────────────────────
 
   private resolveVisionModel(): {
-    ref?: { provider: string; model: string };
+    ref?: { provider: string; model: string; profile?: string; preferredProfile?: string };
     source: DaylogStatus["visionModelSource"];
   } {
     if (this.config.visionModel) {
@@ -296,7 +296,14 @@ export class DaylogService {
         (!entry.capabilities || entry.capabilities.includes("image"));
       if (usable) {
         return {
-          ref: { provider: entry.provider as string, model: entry.model as string },
+          // Auth profile fields ride along so profile-scoped media credentials
+          // keep working when Daylog borrows the media-understanding default.
+          ref: {
+            provider: entry.provider as string,
+            model: entry.model as string,
+            profile: entry.profile,
+            preferredProfile: entry.preferredProfile,
+          },
           source: "media-defaults",
         };
       }
@@ -405,6 +412,8 @@ export class DaylogService {
         await this.deps.runtime.mediaUnderstanding.extractStructuredWithModel({
           provider: vision.ref.provider,
           model: vision.ref.model,
+          profile: vision.ref.profile,
+          preferredProfile: vision.ref.preferredProfile,
           input: images,
           instructions: buildObservationInstructions({
             frameTimes: sampled.map((frame) => frame.capturedAtMs),

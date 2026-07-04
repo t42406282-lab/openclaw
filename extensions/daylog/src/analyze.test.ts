@@ -171,6 +171,17 @@ describe("selectBatchFrames", () => {
     const selection = selectBatchFrames({ frames, windowMs, nowMs: t0 + 60_000 });
     expect(selection?.frameIds).toEqual([1, 2]);
   });
+
+  it("splits at local midnight so batch clocks stay on one day", () => {
+    const nearMidnight = new Date(`${DAY}T23:59:30`).getTime();
+    const frames = [
+      { id: 1, capturedAtMs: nearMidnight },
+      { id: 2, capturedAtMs: nearMidnight + 20_000 },
+      { id: 3, capturedAtMs: nearMidnight + 50_000 },
+    ];
+    const selection = selectBatchFrames({ frames, windowMs, nowMs: nearMidnight + 60_000 });
+    expect(selection?.frameIds).toEqual([1, 2]);
+  });
 });
 
 describe("sampleFrames", () => {
