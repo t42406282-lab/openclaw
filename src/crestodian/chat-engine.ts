@@ -347,7 +347,7 @@ export class CrestodianChatEngine {
 
     const planner =
       this.opts.planWithAssistant ?? (await import("./assistant.js")).planCrestodianCommand;
-    let plan: Awaited<ReturnType<CrestodianAssistantPlanner>> = null;
+    let plan: Awaited<ReturnType<CrestodianAssistantPlanner>>;
     try {
       plan = await withDeadline(
         planner({
@@ -456,7 +456,7 @@ export class CrestodianChatEngine {
    * caught and fixed in the same chat instead of surfacing at gateway start.
    */
   private async verifyConfigAfterWrite(): Promise<string | null> {
-    let issuesText: string | null = null;
+    let issuesText: string | null;
     try {
       const { readConfigFileSnapshot } = await import("../config/config.js");
       const snapshot = await readConfigFileSnapshot();
