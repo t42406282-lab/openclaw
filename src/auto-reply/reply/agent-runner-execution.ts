@@ -74,6 +74,11 @@ import { resolveGroupSessionKey, type SessionEntry } from "../../config/sessions
 import { updateSessionEntry } from "../../config/sessions/session-accessor.js";
 import { resolveSilentReplyPolicy } from "../../config/silent-reply.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import {
+  isTrustedMessageActionTurnIngress,
+  mintMessageActionTurnCapability,
+  revokeMessageActionTurnCapability,
+} from "../../gateway/message-action-turn-capability.js";
 import { logVerbose } from "../../globals.js";
 import {
   captureAgentRunLifecycleGeneration,
@@ -93,9 +98,9 @@ import { shouldPreserveUserFacingSessionStateForInputProvenance } from "../../se
 import { truncateUtf16Safe } from "../../shared/utf16-slice.js";
 import {
   isMarkdownCapableMessageChannel,
+  isInternalMessageChannel,
   resolveMessageChannel,
 } from "../../utils/message-channel.js";
-import { isInternalMessageChannel } from "../../utils/message-channel.js";
 import { stripHeartbeatToken } from "../heartbeat.js";
 import { markReplyPayloadForSourceSuppressionDelivery } from "../reply-payload.js";
 import type { TemplateContext } from "../templating.js";
@@ -2553,6 +2558,37 @@ async function runAgentTurnWithFallbackInternal(
               (agentHarnessPolicy.runtime === "openclaw" && embeddedRunProvider !== provider
                 ? "openclaw"
                 : undefined);
+            const messageActionCapabilitySessionKey =
+              params.runtimePolicySessionKey ?? embeddedContext.sessionKey;
+            const messageActionTurnCapability =
+              isTrustedMessageActionTurnIngress(params.sessionCtx.Provider) &&
+              !params.isHeartbeat &&
+              embeddedContext.agentId &&
+              messageActionCapabilitySessionKey &&
+              embeddedContext.messageProvider &&
+              embeddedContext.currentChannelId
+                ? mintMessageActionTurnCapability({
+                    agentId: embeddedContext.agentId,
+                    runId,
+                    sessionKey: messageActionCapabilitySessionKey,
+                    sessionId: embeddedContext.sessionId,
+                    requesterAccountId: embeddedContext.agentAccountId,
+                    requesterSenderId: senderContext.senderId,
+                    toolContext: {
+                      currentChannelId: embeddedContext.currentChannelId,
+                      currentChatType: embeddedContext.chatType,
+                      currentMessagingTarget: embeddedContext.currentMessagingTarget,
+                      currentGraphChannelId: embeddedContext.currentGraphChannelId,
+                      currentChannelProvider: embeddedContext.currentChannelProvider,
+                      currentThreadTs: embeddedContext.currentThreadTs,
+                      currentMessageId: embeddedContext.currentMessageId,
+                      replyToMode: embeddedContext.replyToMode,
+                      hasRepliedRef: embeddedContext.hasRepliedRef,
+                      sameChannelThreadRequired: embeddedContext.sameChannelThreadRequired,
+                    },
+                    ttlMs: runBaseParams.timeoutMs + 60_000,
+                  })
+                : undefined;
             return (async () => {
               let attemptCompactionCount = 0;
               const lifecycleBackstop = createAgentLifecycleTerminalBackstop({
@@ -2582,6 +2618,7 @@ async function runAgentTurnWithFallbackInternal(
                 const result = await agentTurnTiming.measure("embedded_run", () =>
                   runEmbeddedAgent({
                     ...embeddedContext,
+                    messageActionTurnCapability,
                     lifecycleGeneration,
                     allowGatewaySubagentBinding: true,
                     trigger: params.isHeartbeat ? "heartbeat" : "user",
@@ -3034,6 +3071,7 @@ async function runAgentTurnWithFallbackInternal(
                 throw err;
               } finally {
                 autoCompactionCount += attemptCompactionCount;
+                revokeMessageActionTurnCapability(messageActionTurnCapability);
               }
             })();
           },

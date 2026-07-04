@@ -101,6 +101,7 @@ export type MessageActionRunnerGateway = {
   url?: string;
   token?: string;
   timeoutMs?: number;
+  resolveAgentRuntimeIdentityToken?: () => string | undefined;
   clientName: GatewayClientName;
   clientDisplayName?: string;
   mode: GatewayClientMode;
@@ -123,6 +124,15 @@ export type RunMessageActionParams = {
   requesterSenderUsername?: string | null;
   requesterSenderE164?: string | null;
   senderIsOwner?: boolean;
+  /**
+   * Authorization facts resolved from the host-issued current-turn capability.
+   * Presence means ambient routing fields must not be used as identity.
+   */
+  messageActionAuthorization?: {
+    requesterAccountId?: string;
+    requesterSenderId?: string;
+    toolContext?: ChannelThreadingToolContext;
+  };
   sessionId?: string;
   toolContext?: ChannelThreadingToolContext;
   gateway?: MessageActionRunnerGateway;
@@ -213,6 +223,7 @@ async function callGatewayMessageAction<T>(params: {
     clientName: gateway.clientName,
     clientDisplayName: gateway.clientDisplayName,
     mode: gateway.mode,
+    agentRuntimeIdentityToken: params.gateway?.resolveAgentRuntimeIdentityToken?.(),
   });
 }
 
@@ -661,14 +672,11 @@ async function runGatewayPluginMessageActionOrNull(params: {
       action: params.action,
       params: params.params,
       accountId: params.accountId ?? undefined,
-      requesterAccountId: params.input.requesterAccountId ?? undefined,
-      requesterSenderId: params.input.requesterSenderId ?? undefined,
       senderIsOwner: params.input.senderIsOwner,
       sessionKey: params.input.sessionKey,
       sessionId: params.input.sessionId,
       inboundTurnKind: params.input.inboundEventKind,
       agentId: params.agentId,
-      toolContext: params.input.toolContext,
       idempotencyKey: await resolveGatewayActionIdempotencyKey(
         normalizeOptionalString(params.params.idempotencyKey),
       ),
@@ -688,6 +696,7 @@ function resolveGateway(input: RunMessageActionParams): MessageActionRunnerGatew
     clientName: input.gateway.clientName,
     clientDisplayName: input.gateway.clientDisplayName,
     mode: input.gateway.mode,
+    resolveAgentRuntimeIdentityToken: input.gateway.resolveAgentRuntimeIdentityToken,
   };
 }
 
@@ -1403,6 +1412,7 @@ async function handlePluginAction(ctx: ResolvedActionContext): Promise<MessageAc
     return gatewayPluginAction;
   }
 
+  const authorization = input.messageActionAuthorization;
   const handled = await dispatchChannelMessageAction({
     channel,
     action,
@@ -1412,15 +1422,21 @@ async function handlePluginAction(ctx: ResolvedActionContext): Promise<MessageAc
     mediaLocalRoots: mediaAccess.localRoots,
     mediaReadFile: mediaAccess.readFile,
     accountId: accountId ?? undefined,
-    requesterAccountId: input.requesterAccountId ?? undefined,
-    requesterSenderId: input.requesterSenderId ?? undefined,
+    requesterAccountId:
+      authorization !== undefined
+        ? authorization.requesterAccountId
+        : (input.requesterAccountId ?? undefined),
+    requesterSenderId:
+      authorization !== undefined
+        ? authorization.requesterSenderId
+        : (input.requesterSenderId ?? undefined),
     senderIsOwner: input.senderIsOwner,
     sessionKey: input.sessionKey,
     sessionId: input.sessionId,
     inboundEventKind: input.inboundEventKind,
     agentId,
     gateway,
-    toolContext: input.toolContext,
+    toolContext: authorization !== undefined ? authorization.toolContext : input.toolContext,
     dryRun,
   });
   if (!handled) {

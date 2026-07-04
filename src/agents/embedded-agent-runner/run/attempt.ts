@@ -1310,6 +1310,7 @@ export async function runEmbeddedAttempt(
             messageTo: params.messageTo,
             messageThreadId: params.messageThreadId,
             nativeChannelId: params.chatId,
+            messageActionTurnCapability: params.messageActionTurnCapability,
             groupId: params.groupId,
             groupChannel: params.groupChannel,
             groupSpace: params.groupSpace,

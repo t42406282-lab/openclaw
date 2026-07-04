@@ -45,6 +45,7 @@ import {
   getBootEchoContextForSession,
   stripBootEchoFromOutboundText,
 } from "../../gateway/boot-echo-guard.js";
+import { resolveMessageActionTurnCapability } from "../../gateway/message-action-turn-capability.js";
 import { createAbortError } from "../../infra/abort-signal.js";
 import {
   parseInteractiveParam,
@@ -82,6 +83,7 @@ import { gatewayCallOptionSchemaProperties } from "./gateway-schema.js";
 import {
   readGatewayCallOptions,
   resolveGatewayOptions,
+  resolveMessageActionAgentRuntimeIdentityToken,
   type GatewayCallOptions,
 } from "./gateway.js";
 import { isPollVoteEchoText } from "./poll-vote-echo.js";
@@ -883,6 +885,7 @@ type MessageToolOptions = {
   currentChannelId?: string;
   currentChatType?: ChatType;
   currentMessagingTarget?: string;
+  messageActionTurnCapability?: string;
   currentChannelProvider?: string;
   currentThreadTs?: string;
   agentThreadId?: string | number;
@@ -1344,6 +1347,16 @@ export function createMessageTool(options?: MessageToolOptions): AnyAgentTool {
       const action = readStringParam(params, "action", {
         required: true,
       }) as ChannelMessageActionName;
+      const trustedTurnContext =
+        resolvedAgentId && options?.agentSessionKey
+          ? resolveMessageActionTurnCapability({
+              token: options.messageActionTurnCapability,
+              agentId: resolvedAgentId,
+              runId: options.runId,
+              sessionKey: options.agentSessionKey,
+              sessionId: options.sessionId,
+            })
+          : undefined;
       if (
         suppressedVisiblePayloadReason &&
         action === "send" &&
@@ -1446,6 +1459,14 @@ export function createMessageTool(options?: MessageToolOptions): AnyAgentTool {
         clientName: GATEWAY_CLIENT_IDS.GATEWAY_CLIENT,
         clientDisplayName: "agent",
         mode: GATEWAY_CLIENT_MODES.BACKEND,
+        resolveAgentRuntimeIdentityToken: () =>
+          resolveMessageActionAgentRuntimeIdentityToken({
+            opts: gatewayOpts,
+            target: gatewayResolved.target,
+            turnCapability: options?.messageActionTurnCapability,
+            runId: options?.runId,
+            sessionId: options?.sessionId,
+          }),
       };
       const hasCurrentMessageId =
         typeof options?.currentMessageId === "number" ||
@@ -1507,8 +1528,13 @@ export function createMessageTool(options?: MessageToolOptions): AnyAgentTool {
           action,
           params: actionParams,
           defaultAccountId: accountId ?? undefined,
-          requesterAccountId: agentAccountId,
-          requesterSenderId: options?.requesterSenderId,
+          requesterAccountId: trustedTurnContext?.requesterAccountId,
+          requesterSenderId: trustedTurnContext?.requesterSenderId,
+          messageActionAuthorization: {
+            requesterAccountId: trustedTurnContext?.requesterAccountId,
+            requesterSenderId: trustedTurnContext?.requesterSenderId,
+            toolContext: trustedTurnContext?.toolContext,
+          },
           senderIsOwner: options?.senderIsOwner,
           gateway,
           toolContext,
