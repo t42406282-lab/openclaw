@@ -1,0 +1,223 @@
+import { describe, expect, it } from "vitest";
+import {
+  clockToMs,
+  extractJsonPayload,
+  parseCardsJson,
+  parseObservationSegments,
+  pickKeyframeId,
+  revisionWindow,
+  sampleFrames,
+  selectBatchFrames,
+} from "./analyze.js";
+
+const DAY = "2026-07-03";
+const dayMs = (clock: string) => {
+  const ms = clockToMs(DAY, clock);
+  if (ms === null) {
+    throw new Error(`bad clock ${clock}`);
+  }
+  return ms;
+};
+
+describe("clockToMs", () => {
+  it("parses 24h and 12h clocks on the local day", () => {
+    expect(dayMs("13:05:30") - dayMs("13:05:00")).toBe(30_000);
+    expect(dayMs("1:05 pm")).toBe(dayMs("13:05:00"));
+    expect(dayMs("12:00 am")).toBe(dayMs("00:00:00"));
+  });
+
+  it("rejects malformed input", () => {
+    expect(clockToMs(DAY, "25:00:00")).toBeNull();
+    expect(clockToMs(DAY, "half past nine")).toBeNull();
+    expect(clockToMs("not-a-day", "10:00:00")).toBeNull();
+  });
+});
+
+describe("extractJsonPayload", () => {
+  it("strips fences and surrounding prose", () => {
+    expect(extractJsonPayload('```json\n{"a":1}\n```')).toBe('{"a":1}');
+    expect(extractJsonPayload('Here you go:\n[{"a":1}]\nHope that helps!')).toBe('[{"a":1}]');
+  });
+});
+
+describe("parseObservationSegments", () => {
+  const startMs = dayMs("10:00:00");
+  const endMs = dayMs("10:15:00");
+
+  it("parses and clamps segments into the batch window", () => {
+    const raw = JSON.stringify({
+      segments: [
+        { start: "09:55:00", end: "10:05:00", description: "VS Code: editing store.ts" },
+        { start: "10:05:00", end: "10:20:00", description: "Chrome: reviewing PR #99" },
+      ],
+    });
+    const segments = parseObservationSegments({ raw, day: DAY, startMs, endMs });
+    expect(segments).toHaveLength(2);
+    expect(segments[0].startMs).toBe(startMs);
+    expect(segments[1].endMs).toBe(endMs);
+  });
+
+  it("returns empty on unparseable output", () => {
+    expect(parseObservationSegments({ raw: "no json here", day: DAY, startMs, endMs })).toEqual([]);
+  });
+});
+
+describe("parseCardsJson", () => {
+  const windowStartMs = dayMs("10:00:00");
+  const windowEndMs = dayMs("11:00:00");
+
+  const card = (overrides: Record<string, unknown> = {}) => ({
+    startTime: "10:00:00",
+    endTime: "10:30:00",
+    category: "coding",
+    title: "Working on daylog store",
+    summary: "Implemented SQLite store",
+    detailedSummary: "Added frames and cards tables.",
+    distractions: [],
+    appSites: { primary: "github.com" },
+    ...overrides,
+  });
+
+  it("accepts a valid card array and normalizes fields", () => {
+    const result = parseCardsJson({
+      raw: JSON.stringify([
+        card({ category: "CODING", appSites: { primary: "https://GitHub.com/openclaw" } }),
+      ]),
+      day: DAY,
+      windowStartMs,
+      windowEndMs,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.drafts[0].category).toBe("coding");
+      expect(result.drafts[0].appPrimary).toBe("github.com");
+    }
+  });
+
+  it("maps unknown categories to other", () => {
+    const result = parseCardsJson({
+      raw: JSON.stringify([card({ category: "quantum-vibes" })]),
+      day: DAY,
+      windowStartMs,
+      windowEndMs,
+    });
+    expect(result.ok && result.drafts[0].category).toBe("other");
+  });
+
+  it("trims sub-minute overlaps and rejects large ones", () => {
+    const trimmed = parseCardsJson({
+      raw: JSON.stringify([
+        card({ startTime: "10:00:00", endTime: "10:30:30" }),
+        card({ startTime: "10:30:00", endTime: "11:00:00", title: "Second" }),
+      ]),
+      day: DAY,
+      windowStartMs,
+      windowEndMs,
+    });
+    expect(trimmed.ok).toBe(true);
+    if (trimmed.ok) {
+      expect(trimmed.drafts[1].startMs).toBe(trimmed.drafts[0].endMs);
+    }
+
+    const rejected = parseCardsJson({
+      raw: JSON.stringify([
+        card({ startTime: "10:00:00", endTime: "10:45:00" }),
+        card({ startTime: "10:30:00", endTime: "11:00:00", title: "Second" }),
+      ]),
+      day: DAY,
+      windowStartMs,
+      windowEndMs,
+    });
+    expect(rejected.ok).toBe(false);
+    if (!rejected.ok) {
+      expect(rejected.error).toContain("overlap");
+    }
+  });
+
+  it("reports actionable errors for the correction round-trip", () => {
+    const result = parseCardsJson({
+      raw: JSON.stringify([card({ startTime: "later that day" })]),
+      day: DAY,
+      windowStartMs,
+      windowEndMs,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain("startTime");
+    }
+  });
+});
+
+describe("selectBatchFrames", () => {
+  const windowMs = 15 * 60_000;
+  const t0 = dayMs("10:00:00");
+  const frame = (id: number, offsetSec: number) => ({ id, capturedAtMs: t0 + offsetSec * 1000 });
+
+  it("keeps an in-progress window open", () => {
+    const frames = [frame(1, 0), frame(2, 30), frame(3, 60)];
+    expect(selectBatchFrames({ frames, windowMs, nowMs: t0 + 5 * 60_000 })).toBeNull();
+  });
+
+  it("closes the window once elapsed", () => {
+    const frames = [frame(1, 0), frame(2, 30), frame(3, 60)];
+    const selection = selectBatchFrames({ frames, windowMs, nowMs: t0 + windowMs + 1000 });
+    expect(selection?.frameIds).toEqual([1, 2, 3]);
+    expect(selection?.startMs).toBe(t0);
+  });
+
+  it("splits on capture gaps larger than the max gap", () => {
+    const frames = [frame(1, 0), frame(2, 30), frame(3, 400)];
+    const selection = selectBatchFrames({ frames, windowMs, nowMs: t0 + 60_000 });
+    expect(selection?.frameIds).toEqual([1, 2]);
+  });
+});
+
+describe("sampleFrames", () => {
+  it("keeps small sets and evenly samples large ones", () => {
+    expect(sampleFrames([1, 2, 3], 16)).toEqual([1, 2, 3]);
+    const sampled = sampleFrames(
+      Array.from({ length: 100 }, (_, i) => i),
+      16,
+    );
+    expect(sampled.length).toBeLessThanOrEqual(16);
+    expect(sampled[0]).toBe(0);
+    expect(sampled[sampled.length - 1]).toBe(99);
+  });
+});
+
+describe("revisionWindow / pickKeyframeId", () => {
+  it("expands the window to cover previous draft cards", () => {
+    const window = revisionWindow({
+      batchStartMs: dayMs("10:30:00"),
+      batchEndMs: dayMs("10:45:00"),
+      previousCards: [
+        {
+          id: 1,
+          day: DAY,
+          startMs: dayMs("10:00:00"),
+          endMs: dayMs("10:30:00"),
+          title: "t",
+          summary: "s",
+          detail: "",
+          category: "coding",
+          distractions: [],
+        },
+      ],
+    });
+    expect(window.startMs).toBe(dayMs("10:00:00"));
+    expect(window.endMs).toBe(dayMs("10:45:00"));
+  });
+
+  it("picks the frame closest to the card midpoint", () => {
+    const frames = [
+      { id: 1, capturedAtMs: dayMs("10:00:00") },
+      { id: 2, capturedAtMs: dayMs("10:14:00") },
+      { id: 3, capturedAtMs: dayMs("10:29:00") },
+    ];
+    const keyframe = pickKeyframeId(
+      { startMs: dayMs("10:00:00"), endMs: dayMs("10:30:00") },
+      frames,
+    );
+    expect(keyframe).toBe(2);
+  });
+});

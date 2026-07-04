@@ -36,6 +36,11 @@
       - any-glob-to-any-file:
           - "extensions/googlechat/**"
           - "docs/channels/googlechat.md"
+"plugin: daylog":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "extensions/daylog/**"
+          - "docs/plugins/daylog.md"
 "plugin: google-meet":
   - changed-files:
       - any-glob-to-any-file:
