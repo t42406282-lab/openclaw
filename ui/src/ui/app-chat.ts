@@ -134,7 +134,7 @@ export type ChatHost = ChatInputHistoryState & {
   agentsSelectedId?: string | null;
   eventLogBuffer?: unknown[];
   eventLog?: unknown[];
-  tab?: string;
+  activeRouteId?: string | null;
   /** Callback for slash-command side effects that need app-level access. */
   onSlashAction?: (action: string) => void | Promise<void>;
   /** Selected message to reply to (right-click / keyboard shortcut). */

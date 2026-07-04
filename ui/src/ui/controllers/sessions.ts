@@ -43,7 +43,7 @@ type SessionsChatRunState = {
 export type SessionsState = SessionsChatRunState & {
   client: GatewayBrowserClient | null;
   connected: boolean;
-  tab?: string;
+  activeRouteId?: string | null;
   sessionsLoading: boolean;
   sessionsResult: SessionsListResult | null;
   sessionsResultAgentId?: string | null;
@@ -1228,8 +1228,9 @@ async function loadSessionsOnce(
     );
     const includeGlobal = overrides?.includeGlobal ?? state.sessionsIncludeGlobal;
     const includeUnknown = overrides?.includeUnknown ?? state.sessionsIncludeUnknown;
+    const sessionsViewActive = state.activeRouteId === "sessions";
     const showArchived =
-      overrides?.showArchived ?? (state.tab === "sessions" && state.sessionsShowArchived);
+      overrides?.showArchived ?? (sessionsViewActive && state.sessionsShowArchived);
     const activeMinutes = showArchived
       ? 0
       : (normalizeSessionsFilterOverride(overrides?.activeMinutes) ??
@@ -1271,7 +1272,7 @@ async function loadSessionsOnce(
     const res = await client.request<SessionsListResult | undefined>("sessions.list", params);
     if (res) {
       const projected = projectSessionsResultForAvailability(res, { showArchived });
-      if (overrides?.preserveSessionsViewResult === true && state.tab === "sessions") {
+      if (overrides?.preserveSessionsViewResult === true && sessionsViewActive) {
         for (const row of projected.sessions) {
           upsertCachedChatAgentSessionRow(state, row);
         }

@@ -1,7 +1,12 @@
 // Control UI module implements app behavior.
 import { LitElement } from "lit";
 import { state } from "lit/decorators.js";
-import { appRouter, createApplicationContext, type ApplicationContext } from "../app-routes.ts";
+import {
+  appRouter,
+  createApplicationContext,
+  type ApplicationContext,
+  type RouteId,
+} from "../app-routes.ts";
 import { createRouterOutletSnapshot } from "../app/router-outlet.ts";
 import { i18n, I18nController, isSupportedLocale, t } from "../i18n/index.ts";
 import { loadCron as loadCronPage, loadOverview as loadOverviewPage } from "../pages/loaders.ts";
@@ -208,6 +213,7 @@ function resolveOnboardingMode(): boolean {
 
 export class OpenClawApp extends LitElement {
   readonly i18nController = new I18nController(this);
+  @state() activeRouteId: RouteId | null = null;
   applicationContext: ApplicationContext = createApplicationContext(
     this as unknown as Parameters<typeof createApplicationContext>[0],
     createRouterOutletSnapshot(appRouter),

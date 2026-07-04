@@ -29,6 +29,7 @@ export type RouteLoadContext = {
 };
 
 type ApplicationHost = SettingsHost & {
+  activeRouteId: RouteId | null;
   navDrawerOpen: boolean;
   sessionKey: string;
   setChatMobileControlsOpen: (
@@ -100,6 +101,12 @@ export function createApplicationContext(
 ): ApplicationContext {
   const applicationHost = host as ApplicationHost;
   const loadContext = routeLoadContext(host);
+  const syncVisibleRoute = () => {
+    const selection = routeSnapshot.get();
+    applicationHost.activeRouteId = (selection.pending ?? selection.active)?.routeId ?? null;
+  };
+  syncVisibleRoute();
+  const stopRouteSync = routeSnapshot.subscribe(syncVisibleRoute);
   const navigate = (next: RouteId) => {
     const location = {
       pathname: appRouter.pathForRoute(next, host.basePath),
@@ -133,6 +140,7 @@ export function createApplicationContext(
       }
     },
     dispose: () => {
+      stopRouteSync();
       routeSnapshot.dispose();
     },
   };

@@ -559,7 +559,7 @@ describe("patchSession", () => {
   it("keeps non-Sessions patch refreshes active-only after enabling archived view", async () => {
     const request = vi.fn(async () => ({ ok: true }));
     const state = createState(request, {
-      tab: "overview",
+      activeRouteId: "overview",
       sessionsShowArchived: true,
     });
 
@@ -582,7 +582,10 @@ describe("loadSessions", () => {
       defaults: { modelProvider: null, model: null, contextTokens: null },
       sessions: [{ key: "agent:main:main", kind: "direct", updatedAt: 2 }],
     }));
-    const state = createState(request, { tab: "sessions", sessionsShowArchived: true });
+    const state = createState(request, {
+      activeRouteId: "sessions",
+      sessionsShowArchived: true,
+    });
 
     await loadSessions(state, { showArchived: false });
 
@@ -625,7 +628,7 @@ describe("loadSessions", () => {
       ],
     };
     const state = createState(request, {
-      tab: "sessions",
+      activeRouteId: "sessions",
       sessionKey: "agent:main:active",
       chatRunId: "run-active",
       sessionsShowArchived: true,
@@ -696,7 +699,10 @@ describe("loadSessions", () => {
         ],
       };
     });
-    const state = createState(request, { tab: "sessions", sessionsShowArchived: true });
+    const state = createState(request, {
+      activeRouteId: "sessions",
+      sessionsShowArchived: true,
+    });
 
     await loadSessions(state);
 
@@ -740,7 +746,7 @@ describe("loadSessions", () => {
 
   it.each(["overview", "workboard"])(
     "keeps %s loads active-only after the Sessions archived filter was enabled",
-    async (tab) => {
+    async (activeRouteId) => {
       const request = vi.fn(async () => ({
         ts: 1,
         path: "(multiple)",
@@ -748,7 +754,7 @@ describe("loadSessions", () => {
         defaults: {},
         sessions: [],
       }));
-      const state = createState(request, { tab, sessionsShowArchived: true });
+      const state = createState(request, { activeRouteId, sessionsShowArchived: true });
 
       await loadSessions(state);
 
@@ -897,7 +903,7 @@ describe("loadSessions", () => {
       };
     });
     const state = createState(request, {
-      tab: "sessions",
+      activeRouteId: "sessions",
       sessionsFilterActive: "120",
       sessionsFilterLimit: "50",
       sessionsShowArchived: true,

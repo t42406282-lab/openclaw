@@ -1510,9 +1510,7 @@ describe("handleSendChat", () => {
         return { messages: [] };
       }
       if (method === "sessions.list") {
-        return createSessionsResult([
-          row("agent:main", { hasActiveRun: false, status: "done" }),
-        ]);
+        return createSessionsResult([row("agent:main", { hasActiveRun: false, status: "done" })]);
       }
       throw new Error(`Unexpected request: ${method}`);
     });
@@ -1523,7 +1521,7 @@ describe("handleSendChat", () => {
       client: { request } as unknown as ChatHost["client"],
       chatMessage: "/reset",
       sessionKey: "agent:main",
-      tab: "sessions",
+      activeRouteId: "sessions",
       sessionsShowArchived: true,
       sessionsResult: archivedSessions,
     });
