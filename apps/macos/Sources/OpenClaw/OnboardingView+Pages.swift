@@ -604,7 +604,8 @@ extension OnboardingView {
                         .controlSize(.small)
                 }
             }
-            Text("These macOS permissions let OpenClaw automate apps and capture context on this Mac. Status updates automatically.")
+            Text(
+                "These macOS permissions let OpenClaw automate apps and capture context on this Mac. Status updates automatically.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
