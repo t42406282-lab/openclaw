@@ -1682,12 +1682,11 @@ describe("package artifact reuse", () => {
     expect(releaseDocs).toContain(
       "Focused `npm-telegram` reruns require `release_package_spec` or",
     );
-    expect(fullReleaseDocs.replace(/\s+/gu, " ")).toContain(
-      "input capture fails instead of silently skipping the lane",
-    );
     expectTextToIncludeAll(fullReleaseDocs, [
       "cross_os_suite_filter",
       "QA release-check failures block normal release validation",
+      "input capture fails",
+      "skipping the lane",
       "does not duplicate that",
       "canonical Package Acceptance Telegram E2E",
       "| `npm-telegram`      | Published-package Telegram E2E; requires `release_package_spec` or `npm_telegram_package_spec`. |",

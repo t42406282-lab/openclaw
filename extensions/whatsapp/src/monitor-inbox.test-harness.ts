@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import fsSync from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { resetLogger, setLoggerOverride } from "openclaw/plugin-sdk/runtime-env";
 import { afterEach, beforeEach, expect, vi } from "vitest";
 import {
@@ -187,7 +188,9 @@ const inboundRuntimeMocks = vi.hoisted(() => {
   }
 
   return {
-    downloadMediaMessage: vi.fn().mockResolvedValue(Buffer.from("fake-media-data")),
+    downloadMediaMessage: vi
+      .fn()
+      .mockImplementation(() => Readable.from([Buffer.from("fake-media-data")])),
     isJidGroup: vi.fn((jid: string | undefined | null) =>
       typeof jid === "string" ? jid.endsWith("@g.us") : false,
     ),
