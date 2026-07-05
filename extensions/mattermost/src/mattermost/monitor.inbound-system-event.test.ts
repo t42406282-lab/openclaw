@@ -107,15 +107,20 @@ vi.mock("./draft-stream.js", () => ({
   createMattermostDraftStream: mockState.createMattermostDraftStream,
 }));
 
-vi.mock("./monitor-resources.js", () => ({
-  createMattermostMonitorResources: () => ({
-    resolveMattermostMedia: mockState.resolveMattermostMedia,
-    sendTypingIndicator: vi.fn(async () => {}),
-    resolveChannelInfo: mockState.resolveChannelInfo,
-    resolveUserInfo: mockState.resolveUserInfo,
-    updateModelPickerPost: vi.fn(async () => {}),
-  }),
-}));
+vi.mock("./monitor-resources.js", async () => {
+  const actual =
+    await vi.importActual<typeof import("./monitor-resources.js")>("./monitor-resources.js");
+  return {
+    ...actual,
+    createMattermostMonitorResources: () => ({
+      resolveMattermostMedia: mockState.resolveMattermostMedia,
+      sendTypingIndicator: vi.fn(async () => {}),
+      resolveChannelInfo: mockState.resolveChannelInfo,
+      resolveUserInfo: mockState.resolveUserInfo,
+      updateModelPickerPost: vi.fn(async () => {}),
+    }),
+  };
+});
 
 vi.mock("./monitor-slash.js", () => ({
   registerMattermostMonitorSlashCommands: mockState.registerMattermostMonitorSlashCommands,
