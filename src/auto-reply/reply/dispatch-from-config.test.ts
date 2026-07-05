@@ -2187,7 +2187,9 @@ describe("dispatchReplyFromConfig", () => {
     });
 
     try {
-      await new Promise<void>((resolve) => setImmediate(resolve));
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
       expect(settled).toBe(false);
       expect(replyResolver).not.toHaveBeenCalled();
     } finally {
