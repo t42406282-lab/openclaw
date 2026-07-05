@@ -208,6 +208,35 @@
   font-size: 12px;
 }
 
+/* Phones (matches the layout.mobile.css breakpoint). The gate renders outside
+   the shell, so it needs its own safe-area padding for notch/home-bar overlap
+   with viewport-fit=cover. */
+@media (max-width: 768px), (max-width: 932px) and (max-height: 500px) and (orientation: landscape) {
+  .login-gate {
+    padding: max(16px, var(--safe-area-top)) max(12px, var(--safe-area-right))
+      max(16px, var(--safe-area-bottom)) max(12px, var(--safe-area-left));
+  }
+
+  .login-gate__card {
+    padding: 24px 20px;
+  }
+
+  /* 44px touch targets per platform guidelines. */
+  .login-gate__form .field input {
+    min-height: 44px;
+  }
+
+  .login-gate__secret-row .btn--icon {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .login-gate__connect {
+    min-height: 44px;
+  }
+}
+
 /* ===========================================
    Update Banner
    =========================================== */

@@ -313,9 +313,19 @@ function renderLoginGate(props: LoginGateProps) {
           <label class="field">
             <span>${t("overview.access.wsUrl")}</span>
             <input
+              inputmode="url"
+              autocapitalize="none"
+              autocomplete="off"
+              spellcheck="false"
+              enterkeyhint="go"
               .value=${props.gatewayUrl}
               @input=${(e: Event) => {
                 props.onGatewayUrlChange((e.target as HTMLInputElement).value);
+              }}
+              @keydown=${(e: KeyboardEvent) => {
+                if (e.key === "Enter") {
+                  props.onConnect();
+                }
               }}
               placeholder="ws://127.0.0.1:18789"
             />
@@ -327,6 +337,7 @@ function renderLoginGate(props: LoginGateProps) {
                 type=${props.showGatewayToken ? "text" : "password"}
                 autocomplete="off"
                 spellcheck="false"
+                enterkeyhint="go"
                 .value=${props.token}
                 @input=${(e: Event) => {
                   props.onTokenChange((e.target as HTMLInputElement).value);
@@ -360,6 +371,7 @@ function renderLoginGate(props: LoginGateProps) {
                 type=${props.showGatewayPassword ? "text" : "password"}
                 autocomplete="off"
                 spellcheck="false"
+                enterkeyhint="go"
                 .value=${props.password}
                 @input=${(e: Event) => {
                   props.onPasswordChange((e.target as HTMLInputElement).value);
