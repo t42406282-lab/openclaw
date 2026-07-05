@@ -180,6 +180,12 @@ type ReadResponsePrefixResult = {
   truncated: boolean;
 };
 
+function validateMaxBytes(maxBytes: number): void {
+  if (!Number.isFinite(maxBytes) || maxBytes < 0) {
+    throw new RangeError(`maxBytes must be a non-negative finite number: ${maxBytes}`);
+  }
+}
+
 async function readResponsePrefix(
   response: Response,
   maxBytes: number,
@@ -188,6 +194,7 @@ async function readResponsePrefix(
     onIdleTimeout?: (params: { chunkTimeoutMs: number }) => Error;
   },
 ): Promise<ReadResponsePrefixResult> {
+  validateMaxBytes(maxBytes);
   const body = response.body;
   if (!body || typeof body.getReader !== "function") {
     const fallback = Buffer.from(await response.arrayBuffer());
